@@ -25,18 +25,13 @@
 
     <!-- ======== 状态二：游戏中 ======== -->
     <div v-else-if="state === 'playing'" class="play-screen">
-      <div class="play-topbar">
-        <span class="topbar-item">🐍 <strong>{{ snake.length }}</strong></span>
-        <span class="topbar-item">⭐ <strong>{{ score }}</strong></span>
-        <span class="topbar-item">📊 Lv.<strong>{{ level }}</strong></span>
-        <span class="topbar-item">⚡ {{ speedOptions[speedLevel].label }}</span>
-        <el-button size="small" @click="togglePause" class="topbar-pause">⏯ 暂停</el-button>
-      </div>
       <!-- 大画布：支持触摸滑动 -->
       <div class="canvas-wrapper" ref="canvasWrapper"
         @touchstart.prevent="onTouchStart"
         @touchend.prevent="onTouchEnd">
         <canvas ref="canvasRef" class="play-canvas"></canvas>
+        <!-- 暂停按钮（画布右上角）-->
+        <button class="pause-btn" @click="togglePause" v-if="!paused">⏯</button>
         <div v-if="paused" class="pause-overlay">
           <div class="pause-card">
             <h3>⏸ 已暂停</h3>
@@ -276,11 +271,9 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 .menu-hint { font-size: 12px; color: #c0c4cc; margin: 0; }
 
 .play-screen { display: flex; flex-direction: column; align-items: center; }
-.play-topbar { display: flex; align-items: center; gap: 20px; padding: 8px 16px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 12px; flex-wrap: wrap; justify-content: center; }
-.topbar-item { font-size: 15px; color: #606266; }
-.topbar-item strong { color: #303133; }
-.topbar-pause { margin-left: 8px; }
 .canvas-wrapper { position: relative; border: 3px solid #67c23a; border-radius: 6px; overflow: hidden; line-height: 0; touch-action: none; }
+.pause-btn { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border: none; border-radius: 50%; background: rgba(255,255,255,0.85); font-size: 18px; cursor: pointer; z-index: 4; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.pause-btn:active { background: #e6ffe6; transform: scale(0.9); }
 .play-canvas { display: block; }
 .pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
 .pause-card { text-align: center; color: #fff; }
