@@ -1,0 +1,9 @@
+{
+  "appId": "com.heima.jizhang",
+  "appName": "黑马记账",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}

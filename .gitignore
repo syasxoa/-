@@ -1,0 +1,30 @@
+# 依赖包（太大了，npm install 可随时还原）
+node_modules/
+
+# 构建产物（npm run build 可随时重新生成）
+dist/
+
+# Android 构建产物
+android/
+
+# Rust 编译产物（cargo build 可随时重新生成）
+src-tauri/target/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器配置（每个人电脑不一样，没必要管）
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# 环境变量（如果有密码、密钥，不能提交）
+.env
+.env.local
+.env.*.local
+
+# 日志文件
+*.log
+npm-debug.log*
