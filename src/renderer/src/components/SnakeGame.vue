@@ -243,13 +243,15 @@ async function startGame() {
 }
 
 function onKeyDown(e) {
-  if (state.value !== 'playing' || paused.value) return
+  if (state.value !== 'playing') return
+  // ESC = 暂停/继续
+  if (e.key === 'Escape') { togglePause(); e.preventDefault(); return }
+  if (paused.value) return
   switch (e.key) {
     case 'ArrowUp': changeDir(0, -1); e.preventDefault(); break
     case 'ArrowDown': changeDir(0, 1); e.preventDefault(); break
     case 'ArrowLeft': changeDir(-1, 0); e.preventDefault(); break
     case 'ArrowRight': changeDir(1, 0); e.preventDefault(); break
-    case 'p': case 'P': togglePause(); break
   }
 }
 
@@ -282,7 +284,7 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 .pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
 .pause-card { text-align: center; color: #fff; }
 .pause-card h3 { font-size: 24px; margin: 0 0 16px 0; }
-.pause-btns { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+.pause-btns { display: flex; flex-direction: column; gap: 14px; align-items: center; }
 .pause-link { font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.6); cursor: pointer; user-select: none; padding: 4px 8px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
 .pause-link:hover, .pause-link:active { color: #fff; background: rgba(255,255,255,0.12); }
 
