@@ -31,11 +31,15 @@
         @touchend.prevent="onTouchEnd">
         <canvas ref="canvasRef" class="play-canvas"></canvas>
         <!-- 暂停按钮（画布右上角）-->
-        <button class="pause-btn" @click="togglePause" v-if="!paused">⏯</button>
+        <span class="pause-btn" @click="togglePause" v-if="!paused">暂停</span>
         <div v-if="paused" class="pause-overlay">
           <div class="pause-card">
             <h3>⏸ 已暂停</h3>
-            <el-button type="primary" size="large" @click="togglePause">继续游戏</el-button>
+            <div class="pause-btns">
+              <el-button type="primary" size="large" @click="togglePause">继续游戏</el-button>
+              <el-button size="large" @click="startGame">重新开始</el-button>
+              <el-button size="large" @click="goBack">返回</el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -241,7 +245,7 @@ function gameLoop(ts) {
 
 // ===== 开始 =====
 async function startGame() {
-  if (state.value === 'gameover') { state.value = 'menu'; await nextTick() }
+  if (state.value === 'gameover' || state.value === 'playing') { state.value = 'menu'; await nextTick() }
   state.value = 'playing'
   await nextTick()
 
@@ -301,12 +305,13 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 
 .play-screen { display: flex; flex-direction: column; align-items: center; }
 .canvas-wrapper { position: relative; border: 3px solid #409eff; border-radius: 6px; overflow: hidden; line-height: 0; touch-action: none; }
-.pause-btn { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border: none; border-radius: 50%; background: rgba(255,255,255,0.85); font-size: 18px; cursor: pointer; z-index: 4; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
-.pause-btn:active { background: #e6f0ff; transform: scale(0.9); }
+.pause-btn { position: absolute; top: 6px; right: 10px; font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.7); cursor: pointer; z-index: 4; user-select: none; padding: 2px 6px; border-radius: 3px; transition: color 0.15s, background 0.15s; }
+.pause-btn:hover, .pause-btn:active { color: #fff; background: rgba(255,255,255,0.15); }
 .play-canvas { display: block; }
 .pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
 .pause-card { text-align: center; color: #fff; }
 .pause-card h3 { font-size: 24px; margin: 0 0 16px 0; }
+.pause-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
 .over-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
 .over-card { background: #fff; border-radius: 16px; padding: 36px 32px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.1); max-width: 380px; width: 100%; }
