@@ -23,6 +23,10 @@
               <el-icon><PieChart /></el-icon>
               <span>统计</span>
             </el-menu-item>
+            <el-menu-item index="/games">
+              <el-icon><VideoPlay /></el-icon>
+              <span>小游戏</span>
+            </el-menu-item>
           </el-menu>
         </div>
       </el-header>
@@ -38,7 +42,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { List, PieChart } from '@element-plus/icons-vue'
+import { List, PieChart, VideoPlay } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

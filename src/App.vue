@@ -27,6 +27,10 @@
               <el-icon><FolderOpened /></el-icon>
               <span>分类</span>
             </el-menu-item>
+            <el-menu-item index="/games">
+              <el-icon><VideoPlay /></el-icon>
+              <span>小游戏</span>
+            </el-menu-item>
           </el-menu>
         </div>
       </el-header>
@@ -42,7 +46,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { List, PieChart, FolderOpened } from '@element-plus/icons-vue'
+import { List, PieChart, FolderOpened, VideoPlay } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

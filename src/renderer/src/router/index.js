@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import Statistics from '../views/Statistics.vue'
+import Games from '../views/Games.vue'
 
 const routes = [
   {
@@ -14,6 +15,12 @@ const routes = [
     name: 'statistics',
     component: Statistics,
     meta: { title: '统计' }
+  },
+  {
+    path: '/games',
+    name: 'games',
+    component: Games,
+    meta: { title: '小游戏' }
   }
 ]
 
