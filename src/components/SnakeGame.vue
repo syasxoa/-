@@ -19,7 +19,8 @@
           </div>
         </div>
         <el-button type="primary" size="large" class="start-btn" @click="startGame">🎮 开始游戏</el-button>
-        <p class="menu-hint">↑ ↓ ← → 控制方向 &nbsp; ESC 暂停</p>
+        <p class="menu-hint">💻 键盘：↑ ↓ ← → 控制方向 &nbsp; ESC 暂停</p>
+        <p class="menu-hint mobile-only">📱 触屏：上下左右滑动控制方向</p>
       </div>
     </div>
 
@@ -29,14 +30,20 @@
         @touchstart.prevent="onTouchStart"
         @touchend.prevent="onTouchEnd">
         <canvas ref="canvasRef" class="play-canvas"></canvas>
-        <span class="pause-btn" @click="togglePause" v-if="!paused">暂停</span>
-        <div v-if="paused" class="pause-overlay">
+        <!-- 暂停按钮：阻止触摸事件冒泡到 canvas-wrapper，确保手机端可点击 -->
+        <span class="pause-btn" v-if="!paused"
+          @click="togglePause"
+          @touchstart.stop
+          @touchend.stop>暂停</span>
+        <div v-if="paused" class="pause-overlay"
+          @touchstart.stop
+          @touchend.stop>
           <div class="pause-card">
             <h3>⏸ 已暂停</h3>
             <div class="pause-btns">
-              <span class="pause-link" @click="togglePause">继续</span>
-              <span class="pause-link" @click="restartGame">重新开始</span>
-              <span class="pause-link" @click="goBack">返回</span>
+              <span class="pause-link" @click="togglePause" @touchstart.stop @touchend.stop>继续</span>
+              <span class="pause-link" @click="restartGame" @touchstart.stop @touchend.stop>重新开始</span>
+              <span class="pause-link" @click="goBack" @touchstart.stop @touchend.stop>返回</span>
             </div>
           </div>
         </div>
@@ -114,12 +121,21 @@ function changeDir(dx, dy) {
   nextDirection = { x: dx, y: dy }
 }
 
+// ---- 判断触摸目标是否为暂停相关按钮 ----
+function isPauseTarget(el) {
+  if (!el) return false
+  if (el.classList.contains('pause-btn') || el.classList.contains('pause-link') || el.closest('.pause-overlay')) return true
+  return false
+}
+
 // ---- 触摸手势 ----
 function onTouchStart(e) {
+  if (isPauseTarget(e.target)) return // 触摸暂停按钮，不处理手势
   const t = e.touches[0]; touchStartX = t.clientX; touchStartY = t.clientY
 }
 function onTouchEnd(e) {
   if (state.value !== 'playing' || paused.value) return
+  if (isPauseTarget(e.target)) return
   const t = e.changedTouches[0]
   const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY
   const adx = Math.abs(dx), ady = Math.abs(dy)
@@ -282,7 +298,8 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 .record-num { display: block; font-size: 28px; font-weight: 700; color: #67c23a; }
 .record-unit { font-size: 12px; color: #c0c4cc; }
 .start-btn { margin: 8px 0 12px 0; width: 200px; font-size: 18px; }
-.menu-hint { font-size: 12px; color: #c0c4cc; margin: 0; }
+.menu-hint { font-size: 12px; color: #c0c4cc; margin: 4px 0 0 0; }
+.mobile-only { display: none; }
 
 .play-screen { display: flex; flex-direction: column; align-items: center; }
 .canvas-wrapper { position: relative; border: 3px solid #67c23a; border-radius: 6px; overflow: hidden; line-height: 0; touch-action: none; }
@@ -308,6 +325,9 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 
 @media (max-width: 768px) {
   .menu-card { padding: 28px 20px; }
-  .menu-hint { display: none; }
+  .menu-hint:not(.mobile-only) { display: none; }
+  .mobile-only { display: block; }
+  .pause-btn { padding: 8px 14px; font-size: 16px; }
+  .pause-link { padding: 10px 20px; font-size: 20px; }
 }
 </style>

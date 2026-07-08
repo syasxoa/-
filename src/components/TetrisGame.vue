@@ -19,7 +19,8 @@
           </div>
         </div>
         <el-button type="primary" size="large" class="start-btn" @click="startGame">🎮 开始游戏</el-button>
-        <p class="menu-hint">← → 移动 &nbsp; ↑ 旋转 &nbsp; ↓ 加速 &nbsp; 空格 落底 &nbsp; ESC 暂停</p>
+        <p class="menu-hint">💻 键盘：← → 移动 &nbsp; ↑ 旋转 &nbsp; ↓ 加速 &nbsp; 空格 落底 &nbsp; ESC 暂停</p>
+        <p class="menu-hint mobile-only">📱 点击旋转 &nbsp; ← → 滑动移动 &nbsp; ↓ 滑落底 &nbsp; 长按加速</p>
       </div>
     </div>
 
@@ -27,16 +28,24 @@
     <div v-else-if="state === 'playing'" class="play-screen">
       <div class="canvas-wrapper" ref="canvasWrapper"
         @touchstart.prevent="onTouchStart"
-        @touchend.prevent="onTouchEnd">
+        @touchend.prevent="onTouchEnd"
+        @touchmove.prevent="onTouchMove"
+        @touchcancel="onTouchCancel">
         <canvas ref="canvasRef" class="play-canvas"></canvas>
-        <span class="pause-btn" @click="togglePause" v-if="!paused">暂停</span>
-        <div v-if="paused" class="pause-overlay">
+        <!-- 暂停按钮：阻止触摸事件冒泡到 canvas-wrapper，确保手机端可点击 -->
+        <span class="pause-btn" v-if="!paused"
+          @click="togglePause"
+          @touchstart.stop
+          @touchend.stop>暂停</span>
+        <div v-if="paused" class="pause-overlay"
+          @touchstart.stop
+          @touchend.stop>
           <div class="pause-card">
             <h3>⏸ 已暂停</h3>
             <div class="pause-btns">
-              <span class="pause-link" @click="togglePause">继续</span>
-              <span class="pause-link" @click="restartGame">重新开始</span>
-              <span class="pause-link" @click="goBack">返回</span>
+              <span class="pause-link" @click="togglePause" @touchstart.stop @touchend.stop>继续</span>
+              <span class="pause-link" @click="restartGame" @touchstart.stop @touchend.stop>重新开始</span>
+              <span class="pause-link" @click="goBack" @touchstart.stop @touchend.stop>返回</span>
             </div>
           </div>
         </div>
@@ -83,7 +92,7 @@ const speedOptions = [
 const speedLevel = ref(1)
 const score = ref(0), level = ref(1), lines = ref(0), paused = ref(false)
 const bestScore = ref(0), bestLines = ref(0)
-const isNewRecord = ref(false) // ★ 独立标记，避免被 saveBest 覆盖
+const isNewRecord = ref(false)
 
 const TETROMINOS = {
   I: { shapes: [[[0,0],[1,0],[2,0],[3,0]],[[0,0],[0,1],[0,2],[0,3]],[[0,0],[1,0],[2,0],[3,0]],[[0,0],[0,1],[0,2],[0,3]]], color: '#00bcd4' },
@@ -91,9 +100,7 @@ const TETROMINOS = {
   T: { shapes: [[[0,0],[1,0],[2,0],[1,1]],[[0,0],[0,1],[0,2],[1,1]],[[1,0],[0,1],[1,1],[2,1]],[[0,1],[1,0],[1,1],[1,2]]], color: '#9c27b0' },
   S: { shapes: [[[1,0],[2,0],[0,1],[1,1]],[[0,0],[0,1],[1,1],[1,2]],[[1,0],[2,0],[0,1],[1,1]],[[0,0],[0,1],[1,1],[1,2]]], color: '#4caf50' },
   Z: { shapes: [[[0,0],[1,0],[1,1],[2,1]],[[1,0],[0,1],[1,1],[0,2]],[[0,0],[1,0],[1,1],[2,1]],[[1,0],[0,1],[1,1],[0,2]]], color: '#f44336' },
-  // ★ 修正 J 方块第4旋转态：[[1,0],[1,1],[1,2],[0,2]]
   J: { shapes: [[[0,0],[0,1],[1,1],[2,1]],[[0,0],[1,0],[0,1],[0,2]],[[0,0],[1,0],[2,0],[2,1]],[[1,0],[1,1],[1,2],[0,2]]], color: '#2196f3' },
-  // ★ 修正 L 方块第4旋转态：[[0,0],[0,1],[0,2],[1,2]]
   L: { shapes: [[[2,0],[0,1],[1,1],[2,1]],[[0,0],[1,0],[1,1],[1,2]],[[0,0],[1,0],[2,0],[0,1]],[[0,0],[0,1],[0,2],[1,2]]], color: '#ff9800' }
 }
 const TETRO_NAMES = Object.keys(TETROMINOS)
@@ -101,8 +108,11 @@ const TETRO_NAMES = Object.keys(TETROMINOS)
 let board = [], currentPiece = null, nextPieceName = ''
 let gameLoopId = null, dropInterval = 800, lastDropTime = 0, ctx = null
 
-let touchStartX = 0, touchStartY = 0
+// ===== 触摸手势状态 =====
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0
+let longPressTimer = null, softDropInterval = null
 const SWIPE_THRESHOLD = 30
+const LONG_PRESS_DELAY = 400 // 长按判定的时长（毫秒）
 
 function loadBest() {
   try { const d = JSON.parse(localStorage.getItem('tetris_best') || '{}'); bestScore.value = d.score || 0; bestLines.value = d.lines || 0 } catch { bestScore.value = 0; bestLines.value = 0 }
@@ -183,24 +193,21 @@ function hardDrop() {
 
 function togglePause() { if (state.value === 'playing') paused.value = !paused.value }
 
-// ★ 返回菜单 — 停止游戏循环
 function goBack() {
   state.value = 'menu'
   if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
-  ctx = null // 释放 canvas 引用
+  ctx = null
   loadBest()
 }
 
-// ★ 游戏结束 — 先记新纪录再存
 function endGame() {
-  isNewRecord.value = score.value > bestScore.value // ★ 在 saveBest 前判断
+  isNewRecord.value = score.value > bestScore.value
   state.value = 'gameover'
   saveBest()
   loadBest()
   if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
 }
 
-// ★ 重开游戏（直接从 playing 重启，不经过 menu）
 function restartGame() {
   createBoard()
   score.value = 0; level.value = 1; lines.value = 0; paused.value = false
@@ -208,18 +215,80 @@ function restartGame() {
   nextPieceName = randomPiece(); spawnPiece()
 }
 
-// ===== 触摸手势 =====
-function onTouchStart(e) {
-  const t = e.touches[0]; touchStartX = t.clientX; touchStartY = t.clientY
+// ===== 触摸手势（优化版：下滑落底 + 长按加速）=====
+function isPauseTarget(el) {
+  // 判断触摸目标是否为暂停相关按钮（暂停/继续/重新开始/返回）
+  if (!el) return false
+  if (el.classList.contains('pause-btn') || el.classList.contains('pause-link') || el.closest('.pause-overlay')) return true
+  return false
 }
+
+function onTouchStart(e) {
+  if (isPauseTarget(e.target)) return // 触摸的是暂停按钮，不处理手势
+  const t = e.touches[0]
+  touchStartX = t.clientX; touchStartY = t.clientY
+  touchStartTime = Date.now()
+
+  // 清除之前的长按/软降定时器
+  clearLongPress()
+
+  // 设置长按检测：超过 LONG_PRESS_DELAY 毫秒后开始连续软降（加速下落）
+  longPressTimer = setTimeout(() => {
+    if (state.value !== 'playing' || paused.value) return
+    // 启动连续软降
+    softDropInterval = setInterval(() => {
+      if (state.value !== 'playing' || paused.value) { clearSoftDrop(); return }
+      move(0, 1)
+    }, 50) // 每50ms下落一格，比正常速度快很多
+  }, LONG_PRESS_DELAY)
+}
+
+function onTouchMove(e) {
+  // 触摸移动时取消长按判定（滑动操作不走长按逻辑）
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
+}
+
 function onTouchEnd(e) {
+  clearLongPress() // 手指离开，停止长按/软降
+
   if (state.value !== 'playing' || paused.value) return
+  if (isPauseTarget(e.target)) return
+
   const t = e.changedTouches[0]
   const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY
   const adx = Math.abs(dx), ady = Math.abs(dy)
-  if (adx < SWIPE_THRESHOLD && ady < SWIPE_THRESHOLD) { rotate() }
-  else if (adx > ady) { move(dx > 0 ? 1 : -1, 0) }
-  else { if (dy > 0) move(0, 1) }
+  const duration = Date.now() - touchStartTime
+
+  // 判断手势类型
+  if (adx < SWIPE_THRESHOLD && ady < SWIPE_THRESHOLD) {
+    // 短距离 + 短时间 = 点击 → 旋转方块
+    if (duration < LONG_PRESS_DELAY) rotate()
+  } else if (ady > adx) {
+    // 纵向滑动为主
+    if (dy > SWIPE_THRESHOLD) {
+      // 下滑 → 一键落底（hardDrop）
+      hardDrop()
+    }
+    // 上滑保持不处理（原来是旋转，点击已负责旋转）
+  } else {
+    // 横向滑动 → 左右移动
+    if (adx > SWIPE_THRESHOLD) {
+      move(dx > 0 ? 1 : -1, 0)
+    }
+  }
+}
+
+function onTouchCancel() {
+  clearLongPress()
+}
+
+function clearLongPress() {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
+  clearSoftDrop()
+}
+
+function clearSoftDrop() {
+  if (softDropInterval) { clearInterval(softDropInterval); softDropInterval = null }
 }
 
 // ===== 渲染 =====
@@ -246,7 +315,7 @@ function drawBoard() {
   }
 }
 
-// ★ 游戏循环 — 只在非 menu 状态运行
+// ★ 游戏循环
 function startLoop() {
   function step(ts) {
     if (state.value !== 'menu') {
@@ -279,6 +348,7 @@ async function startGame() {
   ctx = canvas.getContext('2d')
   createBoard()
   score.value = 0; level.value = 1; lines.value = 0; paused.value = false
+  clearLongPress() // 清理可能残留的长按状态
   updateDropInterval(); lastDropTime = performance.now()
   nextPieceName = randomPiece(); spawnPiece()
   startLoop()
@@ -299,7 +369,7 @@ function onKeyDown(e) {
 }
 
 onMounted(() => { loadBest(); window.addEventListener('keydown', onKeyDown) })
-onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.removeEventListener('keydown', onKeyDown) })
+onUnmounted(() => { clearLongPress(); if (gameLoopId) cancelAnimationFrame(gameLoopId); window.removeEventListener('keydown', onKeyDown) })
 </script>
 
 <style scoped>
@@ -317,18 +387,20 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 .record-num { display: block; font-size: 28px; font-weight: 700; color: #409eff; }
 .record-unit { font-size: 12px; color: #c0c4cc; }
 .start-btn { margin: 8px 0 12px 0; width: 200px; font-size: 18px; }
-.menu-hint { font-size: 12px; color: #c0c4cc; margin: 0; }
+.menu-hint { font-size: 12px; color: #c0c4cc; margin: 4px 0 0 0; }
+/* 电脑端隐藏手机提示，手机端显示 */
+.mobile-only { display: none; }
 
 .play-screen { display: flex; flex-direction: column; align-items: center; }
 .canvas-wrapper { position: relative; border: 3px solid #409eff; border-radius: 6px; overflow: hidden; line-height: 0; touch-action: none; }
-.pause-btn { position: absolute; top: 6px; right: 10px; font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.7); cursor: pointer; z-index: 4; user-select: none; padding: 2px 6px; border-radius: 3px; transition: color 0.15s, background 0.15s; }
+.pause-btn { position: absolute; top: 6px; right: 10px; font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.7); cursor: pointer; z-index: 4; user-select: none; padding: 6px 10px; border-radius: 3px; transition: color 0.15s, background 0.15s; }
 .pause-btn:hover, .pause-btn:active { color: #fff; background: rgba(255,255,255,0.15); }
 .play-canvas { display: block; }
-.pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
+.pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 5; }
 .pause-card { text-align: center; color: #fff; }
 .pause-card h3 { font-size: 24px; margin: 0 0 36px 0; }
 .pause-btns { display: flex; flex-direction: column; gap: 14px; align-items: center; }
-.pause-link { font-size: 18px; font-weight: 400; color: rgba(255,255,255,0.6); cursor: pointer; user-select: none; padding: 4px 8px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
+.pause-link { font-size: 18px; font-weight: 400; color: rgba(255,255,255,0.6); cursor: pointer; user-select: none; padding: 8px 16px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
 .pause-link:hover, .pause-link:active { color: #fff; background: rgba(255,255,255,0.12); }
 
 .over-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
@@ -343,6 +415,9 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 
 @media (max-width: 768px) {
   .menu-card { padding: 28px 20px; }
-  .menu-hint { display: none; }
+  .menu-hint:not(.mobile-only) { display: none; }
+  .mobile-only { display: block; }
+  .pause-btn { padding: 8px 14px; font-size: 16px; }
+  .pause-link { padding: 10px 20px; font-size: 20px; }
 }
 </style>
