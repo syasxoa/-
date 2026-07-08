@@ -36,9 +36,9 @@
           <div class="pause-card">
             <h3>⏸ 已暂停</h3>
             <div class="pause-btns">
-              <el-button type="primary" size="large" @click="togglePause">继续游戏</el-button>
-              <el-button size="large" @click="startGame">重新开始</el-button>
-              <el-button size="large" @click="goBack">返回</el-button>
+              <span class="pause-link" @click="togglePause">继续</span>
+              <span class="pause-link" @click="startGame">重新开始</span>
+              <span class="pause-link" @click="goBack">返回</span>
             </div>
           </div>
         </div>
@@ -282,7 +282,9 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 .pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
 .pause-card { text-align: center; color: #fff; }
 .pause-card h3 { font-size: 24px; margin: 0 0 16px 0; }
-.pause-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.pause-btns { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+.pause-link { font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.6); cursor: pointer; user-select: none; padding: 4px 8px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
+.pause-link:hover, .pause-link:active { color: #fff; background: rgba(255,255,255,0.12); }
 
 .over-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
 .over-card { background: #fff; border-radius: 16px; padding: 36px 32px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.1); max-width: 380px; width: 100%; }
