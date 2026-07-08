@@ -40,12 +40,13 @@
 import { ref, onMounted } from 'vue'
 import { Plus, Search, Download } from '@element-plus/icons-vue'
 import { useExpenseStore } from '../stores/expense'
-import { categories } from '../database/categories'
+import { getAllCategories } from '../database/categories'
 import ExpenseList from '../components/ExpenseList.vue'
 import ExpenseFormDialog from '../components/ExpenseFormDialog.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const store = useExpenseStore()
+const categories = getAllCategories() // 完整分类列表（含用户自定义）
 const selectedMonth = ref(store.currentYearMonth)
 const selectedCategory = ref('')
 const searchKeyword = ref('')

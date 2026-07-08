@@ -36,8 +36,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { categories, getCategoryL2List } from '../database/categories'
+import { computed, ref } from 'vue'
+import { getAllCategories, getCategoryL2List } from '../database/categories'
 
 const props = defineProps({
   l1: { type: String, default: '' },
@@ -46,13 +46,17 @@ const props = defineProps({
 
 const emit = defineEmits(['update:l1', 'update:l2'])
 
+// 获取完整分类列表（含用户自定义）
+// 父组件对话框设置了 destroy-on-close，每次打开都会重新创建本组件，因此数据始终最新
+const categories = ref(getAllCategories())
+
 const subCategories = computed(() => {
   return props.l1 ? getCategoryL2List(props.l1) : []
 })
 
 const quickCategories = computed(() => {
   const result = []
-  for (const cat of categories) {
+  for (const cat of categories.value) {
     for (const child of cat.children.slice(0, 2)) {
       result.push({ l1: cat.name, l2: child })
     }
