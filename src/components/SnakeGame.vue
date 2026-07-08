@@ -8,22 +8,14 @@
         <div class="menu-section">
           <div class="menu-label">游戏速度</div>
           <div class="speed-row">
-            <el-button
-              v-for="opt in speedOptions" :key="opt.value"
-              :type="speedLevel === opt.value ? 'primary' : ''"
-              @click="speedLevel = opt.value" size="large"
-            >{{ opt.label }}</el-button>
+            <el-button v-for="opt in speedOptions" :key="opt.value" :type="speedLevel === opt.value ? 'primary' : ''" @click="speedLevel = opt.value" size="large">{{ opt.label }}</el-button>
           </div>
         </div>
         <div class="menu-section">
           <div class="menu-label">🏆 历史最佳</div>
           <div class="record-row">
-            <div class="record-item">
-              <span class="record-num">{{ bestScore }}</span><span class="record-unit">最高分</span>
-            </div>
-            <div class="record-item">
-              <span class="record-num">{{ bestLength }}</span><span class="record-unit">最长蛇</span>
-            </div>
+            <div class="record-item"><span class="record-num">{{ bestScore }}</span><span class="record-unit">最高分</span></div>
+            <div class="record-item"><span class="record-num">{{ bestLength }}</span><span class="record-unit">最长蛇</span></div>
           </div>
         </div>
         <el-button type="primary" size="large" class="start-btn" @click="startGame">🎮 开始游戏</el-button>
@@ -40,23 +32,16 @@
         <span class="topbar-item">⚡ {{ speedOptions[speedLevel].label }}</span>
         <el-button size="small" @click="togglePause" class="topbar-pause">⏯ 暂停</el-button>
       </div>
-      <div class="canvas-wrapper" ref="canvasWrapper">
+      <!-- 大画布：支持触摸滑动 -->
+      <div class="canvas-wrapper" ref="canvasWrapper"
+        @touchstart.prevent="onTouchStart"
+        @touchend.prevent="onTouchEnd">
         <canvas ref="canvasRef" class="play-canvas"></canvas>
         <div v-if="paused" class="pause-overlay">
           <div class="pause-card">
             <h3>⏸ 已暂停</h3>
             <el-button type="primary" size="large" @click="togglePause">继续游戏</el-button>
           </div>
-        </div>
-      </div>
-      <div class="play-bottombar">
-        <div class="touch-row">
-          <button class="ctrl-btn" @pointerdown.prevent="changeDir(0, -1)">▲</button>
-        </div>
-        <div class="touch-row">
-          <button class="ctrl-btn" @pointerdown.prevent="changeDir(-1, 0)">◀</button>
-          <button class="ctrl-btn" @pointerdown.prevent="changeDir(0, 1)">▼</button>
-          <button class="ctrl-btn" @pointerdown.prevent="changeDir(1, 0)">▶</button>
         </div>
       </div>
     </div>
@@ -86,13 +71,10 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 
 const state = ref('menu')
-const canvasRef = ref(null)
-const canvasWrapper = ref(null)
+const canvasRef = ref(null), canvasWrapper = ref(null)
 
 const COLS = 20, ROWS = 20
-let CELL = 26
-let canvasWidth = COLS * CELL
-let canvasHeight = ROWS * CELL
+let CELL = 26, canvasWidth = COLS * CELL, canvasHeight = ROWS * CELL
 
 const speedOptions = [
   { label: '🐢 慢速', value: 0 },
@@ -101,13 +83,16 @@ const speedOptions = [
   { label: '🚀 极速', value: 3 }
 ]
 const speedLevel = ref(1)
-
 const snake = ref([]), score = ref(0), level = ref(1), paused = ref(false)
 const bestScore = ref(0), bestLength = ref(3)
 
 let direction = { x: 1, y: 0 }, nextDirection = { x: 1, y: 0 }
 let food = { x: 10, y: 10 }
 let gameLoopId = null, moveInterval = 150, lastMoveTime = 0, ctx = null
+
+// ---- 触摸手势 ----
+let touchStartX = 0, touchStartY = 0
+const SWIPE_THRESHOLD = 25
 
 function loadBest() {
   try { const d = JSON.parse(localStorage.getItem('snake_best') || '{}'); bestScore.value = d.score || 0; bestLength.value = d.length || 3 } catch { bestScore.value = 0; bestLength.value = 3 }
@@ -124,6 +109,7 @@ function updateMoveInterval() {
   moveInterval = Math.max(30, Math.floor(150 * (m[speedLevel.value] || 1) - (level.value - 1) * 8))
 }
 
+// ---- 方向切换（键盘+触屏共用）----
 function changeDir(dx, dy) {
   if (state.value !== 'playing' || paused.value) return
   if (dx === -1 && direction.x === 1) return
@@ -133,6 +119,30 @@ function changeDir(dx, dy) {
   nextDirection = { x: dx, y: dy }
 }
 
+// ---- 触摸手势 ----
+function onTouchStart(e) {
+  const t = e.touches[0]
+  touchStartX = t.clientX; touchStartY = t.clientY
+}
+function onTouchEnd(e) {
+  if (state.value !== 'playing' || paused.value) return
+  const t = e.changedTouches[0]
+  const dx = t.clientX - touchStartX
+  const dy = t.clientY - touchStartY
+  const adx = Math.abs(dx), ady = Math.abs(dy)
+
+  if (adx < SWIPE_THRESHOLD && ady < SWIPE_THRESHOLD) return // 太短忽略
+
+  if (adx > ady) {
+    // 水平滑动
+    changeDir(dx > 0 ? 1 : -1, 0)
+  } else {
+    // 垂直滑动
+    changeDir(0, dy > 0 ? 1 : -1)
+  }
+}
+
+// ---- 渲染 ----
 function draw() {
   if (!ctx) return
   ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, canvasWidth, canvasHeight)
@@ -152,7 +162,8 @@ function drawSnake() {
   const s = snake.value
   for (let i = 0; i < s.length; i++) {
     const { x, y } = s[i]; const px = x * CELL + 1, py = y * CELL + 1, size = CELL - 2
-    ctx.fillStyle = `rgb(${Math.round(45 + (i / Math.max(s.length - 1, 1)) * 30)},${Math.round(200 - (i / Math.max(s.length - 1, 1)) * 100)},${Math.round(100 - (i / Math.max(s.length - 1, 1)) * 50)})`
+    const t = i / Math.max(s.length - 1, 1)
+    ctx.fillStyle = `rgb(${Math.round(45 + t * 30)},${Math.round(200 - t * 100)},${Math.round(100 - t * 50)})`
     ctx.fillRect(px, py, size, size)
     if (i === 0) {
       ctx.fillStyle = '#fff'; const es = size / 5
@@ -198,7 +209,6 @@ function moveSnake() {
 
 function togglePause() { if (state.value === 'playing') paused.value = !paused.value }
 function goBack() { state.value = 'menu'; loadBest() }
-
 function endGame() {
   state.value = 'gameover'; saveBest()
   if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
@@ -210,11 +220,10 @@ function gameLoop(ts) {
   gameLoopId = requestAnimationFrame(gameLoop)
 }
 
-// ===== 开始（关键修复：用 nextTick 等 DOM）=====
 async function startGame() {
   if (state.value === 'gameover') { state.value = 'menu'; await nextTick() }
   state.value = 'playing'
-  await nextTick() // ★ 等 Vue 渲染完 canvas-wrapper
+  await nextTick()
 
   const canvas = canvasRef.value
   const wrapper = canvasWrapper.value
@@ -229,8 +238,7 @@ async function startGame() {
 
   ctx = canvas.getContext('2d')
   initSnake(); score.value = 0; level.value = 1; paused.value = false
-  updateMoveInterval(); lastMoveTime = performance.now()
-  spawnFood()
+  updateMoveInterval(); lastMoveTime = performance.now(); spawnFood()
   if (gameLoopId) cancelAnimationFrame(gameLoopId)
   gameLoopId = requestAnimationFrame(gameLoop)
 }
@@ -253,7 +261,6 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 <style scoped>
 .snake-root { width: 100%; }
 
-/* ===== 菜单 ===== */
 .menu-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
 .menu-card { background: #fff; border-radius: 16px; padding: 40px 36px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.08); max-width: 400px; width: 100%; }
 .menu-icon { font-size: 64px; margin-bottom: 8px; }
@@ -268,24 +275,17 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 .start-btn { margin: 8px 0 12px 0; width: 200px; font-size: 18px; }
 .menu-hint { font-size: 12px; color: #c0c4cc; margin: 0; }
 
-/* ===== 游戏 ===== */
-.play-screen { display: flex; flex-direction: column; align-items: center; position: relative; }
+.play-screen { display: flex; flex-direction: column; align-items: center; }
 .play-topbar { display: flex; align-items: center; gap: 20px; padding: 8px 16px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 12px; flex-wrap: wrap; justify-content: center; }
 .topbar-item { font-size: 15px; color: #606266; }
 .topbar-item strong { color: #303133; }
 .topbar-pause { margin-left: 8px; }
-.canvas-wrapper { position: relative; border: 3px solid #67c23a; border-radius: 6px; overflow: hidden; line-height: 0; }
+.canvas-wrapper { position: relative; border: 3px solid #67c23a; border-radius: 6px; overflow: hidden; line-height: 0; touch-action: none; }
 .play-canvas { display: block; }
 .pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
 .pause-card { text-align: center; color: #fff; }
 .pause-card h3 { font-size: 24px; margin: 0 0 16px 0; }
 
-.play-bottombar { margin-top: 12px; text-align: center; }
-.touch-row { display: flex; justify-content: center; gap: 8px; margin-bottom: 6px; }
-.ctrl-btn { width: 48px; height: 44px; border: none; border-radius: 10px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-size: 20px; cursor: pointer; user-select: none; touch-action: manipulation; }
-.ctrl-btn:active { background: #e6ffe6; transform: scale(0.95); }
-
-/* ===== 结束 ===== */
 .over-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
 .over-card { background: #fff; border-radius: 16px; padding: 36px 32px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.1); max-width: 380px; width: 100%; }
 .over-icon { font-size: 48px; margin-bottom: 4px; }
@@ -296,5 +296,8 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 .new-record { color: #e6a23c; font-weight: 700; font-size: 16px; margin-top: 10px; }
 .over-btns { display: flex; gap: 12px; justify-content: center; }
 
-@media (max-width: 768px) { .menu-card { padding: 28px 20px; } }
+@media (max-width: 768px) {
+  .menu-card { padding: 28px 20px; }
+  .menu-hint { display: none; }
+}
 </style>

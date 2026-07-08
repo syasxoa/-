@@ -8,22 +8,14 @@
         <div class="menu-section">
           <div class="menu-label">游戏速度</div>
           <div class="speed-row">
-            <el-button
-              v-for="opt in speedOptions" :key="opt.value"
-              :type="speedLevel === opt.value ? 'primary' : ''"
-              @click="speedLevel = opt.value" size="large"
-            >{{ opt.label }}</el-button>
+            <el-button v-for="opt in speedOptions" :key="opt.value" :type="speedLevel === opt.value ? 'primary' : ''" @click="speedLevel = opt.value" size="large">{{ opt.label }}</el-button>
           </div>
         </div>
         <div class="menu-section">
           <div class="menu-label">🏆 历史最佳</div>
           <div class="record-row">
-            <div class="record-item">
-              <span class="record-num">{{ bestScore }}</span><span class="record-unit">最高分</span>
-            </div>
-            <div class="record-item">
-              <span class="record-num">{{ bestLines }}</span><span class="record-unit">最多行</span>
-            </div>
+            <div class="record-item"><span class="record-num">{{ bestScore }}</span><span class="record-unit">最高分</span></div>
+            <div class="record-item"><span class="record-num">{{ bestLines }}</span><span class="record-unit">最多行</span></div>
           </div>
         </div>
         <el-button type="primary" size="large" class="start-btn" @click="startGame">🎮 开始游戏</el-button>
@@ -40,7 +32,10 @@
         <span class="topbar-item">📏 {{ lines }}行</span>
         <el-button size="small" @click="togglePause" class="topbar-pause">⏯ 暂停</el-button>
       </div>
-      <div class="canvas-wrapper" ref="canvasWrapper">
+      <!-- 大画布：支持触摸手势 -->
+      <div class="canvas-wrapper" ref="canvasWrapper"
+        @touchstart.prevent="onTouchStart"
+        @touchend.prevent="onTouchEnd">
         <canvas ref="canvasRef" class="play-canvas"></canvas>
         <div v-if="paused" class="pause-overlay">
           <div class="pause-card">
@@ -48,23 +43,6 @@
             <el-button type="primary" size="large" @click="togglePause">继续游戏</el-button>
           </div>
         </div>
-      </div>
-      <div class="play-bottombar">
-        <div class="touch-row">
-          <button class="ctrl-btn" @pointerdown.prevent="rotate">🔄</button>
-        </div>
-        <div class="touch-row">
-          <button class="ctrl-btn" @pointerdown.prevent="move(-1,0)">◀</button>
-          <button class="ctrl-btn" @pointerdown.prevent="move(0,1)">▼</button>
-          <button class="ctrl-btn" @pointerdown.prevent="move(1,0)">▶</button>
-        </div>
-        <div class="touch-row">
-          <button class="ctrl-btn ctrl-wide" @pointerdown.prevent="hardDrop">⏬ 落底</button>
-        </div>
-      </div>
-      <div class="preview-mini">
-        <div class="preview-label">下一个</div>
-        <canvas ref="nextCanvasRef" class="preview-canvas"></canvas>
       </div>
     </div>
 
@@ -94,14 +72,10 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 
 const state = ref('menu')
 const canvasRef = ref(null)
-const nextCanvasRef = ref(null)
 const canvasWrapper = ref(null)
 
 const COLS = 10, ROWS = 20
-let CELL = 32
-let canvasWidth = COLS * CELL
-let canvasHeight = ROWS * CELL
-const nextSize = 120
+let CELL = 32, canvasWidth = 640, canvasHeight = 1120
 
 const speedOptions = [
   { label: '🐢 慢速', value: 0 },
@@ -110,7 +84,6 @@ const speedOptions = [
   { label: '🚀 极速', value: 3 }
 ]
 const speedLevel = ref(1)
-
 const score = ref(0), level = ref(1), lines = ref(0), paused = ref(false)
 const bestScore = ref(0), bestLines = ref(0)
 
@@ -126,8 +99,11 @@ const TETROMINOS = {
 const TETRO_NAMES = Object.keys(TETROMINOS)
 
 let board = [], currentPiece = null, nextPieceName = ''
-let gameLoopId = null, dropInterval = 800, lastDropTime = 0
-let ctx = null, nextCtx = null
+let gameLoopId = null, dropInterval = 800, lastDropTime = 0, ctx = null
+
+// ---- 触摸手势变量 ----
+let touchStartX = 0, touchStartY = 0
+const SWIPE_THRESHOLD = 30 // 超过30px算滑动，否则算点击
 
 function loadBest() {
   try { const d = JSON.parse(localStorage.getItem('tetris_best') || '{}'); bestScore.value = d.score || 0; bestLines.value = d.lines || 0 } catch { bestScore.value = 0; bestLines.value = 0 }
@@ -174,8 +150,7 @@ function clearLines() {
 function spawnPiece() {
   const name = nextPieceName || randomPiece(); nextPieceName = randomPiece()
   currentPiece = { name, rotation: 0, x: Math.floor((COLS - 4) / 2), y: -1 }
-  if (collides(name, 0, currentPiece.x, currentPiece.y)) { endGame(); return }
-  drawPreview()
+  if (collides(name, 0, currentPiece.x, currentPiece.y)) { endGame() }
 }
 
 function move(dx, dy) {
@@ -210,10 +185,33 @@ function hardDrop() {
 
 function togglePause() { if (state.value === 'playing') paused.value = !paused.value }
 function goBack() { state.value = 'menu'; loadBest() }
-
 function endGame() {
   state.value = 'gameover'; saveBest()
   if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
+}
+
+// ===== 触摸手势 =====
+function onTouchStart(e) {
+  const t = e.touches[0]
+  touchStartX = t.clientX; touchStartY = t.clientY
+}
+function onTouchEnd(e) {
+  if (state.value !== 'playing' || paused.value) return
+  const t = e.changedTouches[0]
+  const dx = t.clientX - touchStartX
+  const dy = t.clientY - touchStartY
+  const adx = Math.abs(dx), ady = Math.abs(dy)
+
+  if (adx < SWIPE_THRESHOLD && ady < SWIPE_THRESHOLD) {
+    // 点击 → 旋转
+    rotate()
+  } else if (adx > ady) {
+    // 左右滑动 → 移动
+    move(dx > 0 ? 1 : -1, 0)
+  } else {
+    // 上下滑动 → 加速下落
+    if (dy > 0) move(0, 1)
+  }
 }
 
 // ===== 渲染 =====
@@ -240,32 +238,17 @@ function drawBoard() {
   }
 }
 
-function drawPreview() {
-  if (!nextCtx) return
-  nextCtx.fillStyle = '#1a1a2e'; nextCtx.fillRect(0, 0, nextSize, nextSize)
-  if (!nextPieceName) return
-  const shape = TETROMINOS[nextPieceName].shapes[0], color = TETROMINOS[nextPieceName].color
-  const s = 24; const minX = Math.min(...shape.map(p => p[0])), maxX = Math.max(...shape.map(p => p[0]))
-  const minY = Math.min(...shape.map(p => p[1])), maxY = Math.max(...shape.map(p => p[1]))
-  const ox = Math.floor((5 - (maxX - minX + 1)) / 2) - minX, oy = Math.floor((5 - (maxY - minY + 1)) / 2) - minY
-  for (const [dx, dy] of shape) { const x = (dx + ox) * s, y = (dy + oy) * s; nextCtx.fillStyle = color; nextCtx.fillRect(x + 1, y + 1, s - 2, s - 2) }
-}
-
 function gameLoop(ts) {
   if (state.value === 'playing' && !paused.value && ts - lastDropTime > dropInterval) { move(0, 1); lastDropTime = ts }
   if (state.value !== 'menu') drawBoard()
   gameLoopId = requestAnimationFrame(gameLoop)
 }
 
-// ===== 开始（关键修复：用 nextTick 等 DOM 渲染完成）=====
+// ===== 开始 =====
 async function startGame() {
-  // 如果当前是结束状态，先切回 menu 再切 playing，确保过渡
-  if (state.value === 'gameover') {
-    state.value = 'menu'
-    await nextTick()
-  }
+  if (state.value === 'gameover') { state.value = 'menu'; await nextTick() }
   state.value = 'playing'
-  await nextTick() // ★ 等 Vue 渲染完 play-screen 的 DOM
+  await nextTick()
 
   const canvas = canvasRef.value
   const wrapper = canvasWrapper.value
@@ -279,8 +262,6 @@ async function startGame() {
   if (canvas) { canvas.width = canvasWidth; canvas.height = canvasHeight; canvas.style.width = canvasWidth + 'px'; canvas.style.height = canvasHeight + 'px' }
 
   ctx = canvas.getContext('2d')
-  nextCtx = nextCanvasRef.value?.getContext('2d')
-
   createBoard()
   score.value = 0; level.value = 1; lines.value = 0; paused.value = false
   updateDropInterval(); lastDropTime = performance.now()
@@ -309,7 +290,6 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 <style scoped>
 .tetris-root { width: 100%; }
 
-/* ===== 菜单 ===== */
 .menu-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
 .menu-card { background: #fff; border-radius: 16px; padding: 40px 36px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.08); max-width: 400px; width: 100%; }
 .menu-icon { font-size: 64px; margin-bottom: 8px; }
@@ -324,29 +304,17 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 .start-btn { margin: 8px 0 12px 0; width: 200px; font-size: 18px; }
 .menu-hint { font-size: 12px; color: #c0c4cc; margin: 0; }
 
-/* ===== 游戏 ===== */
-.play-screen { position: relative; display: flex; flex-direction: column; align-items: center; }
+.play-screen { display: flex; flex-direction: column; align-items: center; }
 .play-topbar { display: flex; align-items: center; gap: 20px; padding: 8px 16px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 12px; flex-wrap: wrap; justify-content: center; }
 .topbar-item { font-size: 15px; color: #606266; }
 .topbar-item strong { color: #303133; }
 .topbar-pause { margin-left: 8px; }
-.canvas-wrapper { position: relative; border: 3px solid #409eff; border-radius: 6px; overflow: hidden; line-height: 0; }
+.canvas-wrapper { position: relative; border: 3px solid #409eff; border-radius: 6px; overflow: hidden; line-height: 0; touch-action: none; }
 .play-canvas { display: block; }
 .pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
 .pause-card { text-align: center; color: #fff; }
 .pause-card h3 { font-size: 24px; margin: 0 0 16px 0; }
 
-.preview-mini { position: absolute; right: 50%; margin-right: -235px; top: 60px; background: #1a1a2e; border: 2px solid #409eff; border-radius: 6px; padding: 6px; z-index: 5; }
-.preview-label { font-size: 10px; color: #909399; text-align: center; margin-bottom: 2px; }
-.preview-canvas { display: block; }
-
-.play-bottombar { margin-top: 12px; text-align: center; }
-.touch-row { display: flex; justify-content: center; gap: 8px; margin-bottom: 6px; }
-.ctrl-btn { width: 48px; height: 44px; border: none; border-radius: 10px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-size: 20px; cursor: pointer; user-select: none; touch-action: manipulation; }
-.ctrl-btn:active { background: #e6f0ff; transform: scale(0.95); }
-.ctrl-wide { width: auto; padding: 0 16px; font-size: 14px; }
-
-/* ===== 结束 ===== */
 .over-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
 .over-card { background: #fff; border-radius: 16px; padding: 36px 32px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.1); max-width: 380px; width: 100%; }
 .over-icon { font-size: 48px; margin-bottom: 4px; }
@@ -359,6 +327,6 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 
 @media (max-width: 768px) {
   .menu-card { padding: 28px 20px; }
-  .preview-mini { right: 10px; margin-right: 0; }
+  .menu-hint { display: none; }
 }
 </style>
