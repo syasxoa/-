@@ -4,12 +4,12 @@
     <div class="game-area">
       <canvas ref="canvasRef" :width="canvasWidth" :height="canvasHeight"></canvas>
 
-      <!-- 开始提示 -->
-      <div v-if="!gameStarted" class="overlay">
+      <!-- 开始遮罩（仅在未开始且未结束时显示，解决与结束遮罩重叠的bug） -->
+      <div v-if="!gameStarted && !gameOver" class="overlay">
         <div class="overlay-box">
           <h3>🐍 贪吃蛇</h3>
-          <p>按方向键开始游戏</p>
-          <el-button type="primary" @click="startGame">开始</el-button>
+          <el-button type="primary" @click="startGame" size="large">开始游戏</el-button>
+          <p class="overlay-tips">↑ ↓ ← → 控制方向</p>
         </div>
       </div>
 
@@ -42,9 +42,25 @@
         <div class="panel-value">{{ score }}</div>
       </div>
       <div class="panel-card">
-        <div class="panel-label">⚡ 速度</div>
+        <div class="panel-label">📊 等级</div>
         <div class="panel-value">Lv.{{ level }}</div>
       </div>
+
+      <!-- 速度选择器 -->
+      <div class="panel-card panel-speed">
+        <div class="panel-label">⚡ 速度调节</div>
+        <div class="speed-buttons">
+          <el-button
+            v-for="opt in speedOptions"
+            :key="opt.value"
+            :type="speedLevel === opt.value ? 'primary' : ''"
+            size="small"
+            @click="setSpeed(opt.value)"
+            plain
+          >{{ opt.label }}</el-button>
+        </div>
+      </div>
+
       <div class="panel-buttons">
         <el-button type="primary" @click="startGame" size="small">
           {{ gameStarted ? '重新开始' : '开始游戏' }}
@@ -53,11 +69,18 @@
           暂停 / 继续
         </el-button>
       </div>
-      <div class="panel-tips">
-        <p><strong>操作说明</strong></p>
-        <p>↑ ↓ ← → 控制方向</p>
-        <p>P 暂停 / 继续</p>
-        <p>空格 重新开始</p>
+
+      <!-- 触屏方向按钮 -->
+      <div class="touch-controls">
+        <div class="touch-label">触摸操作</div>
+        <div class="touch-row">
+          <el-button class="touch-btn" @pointerdown.prevent="changeDir(0, -1)" size="small">▲</el-button>
+        </div>
+        <div class="touch-row">
+          <el-button class="touch-btn" @pointerdown.prevent="changeDir(-1, 0)" size="small">◀</el-button>
+          <el-button class="touch-btn" @pointerdown.prevent="changeDir(0, 1)" size="small">▼</el-button>
+          <el-button class="touch-btn" @pointerdown.prevent="changeDir(1, 0)" size="small">▶</el-button>
+        </div>
       </div>
     </div>
   </div>
@@ -70,108 +93,103 @@ import { ref, onMounted, onUnmounted } from 'vue'
 const canvasRef = ref(null)
 
 // ---- 画布尺寸 ----
-const COLS = 20        // 列数（水平格子数）
-const ROWS = 20        // 行数（垂直格子数）
-const CELL = 22         // 每格像素
+const COLS = 20
+const ROWS = 20
+const CELL = 22
 const canvasWidth = COLS * CELL
 const canvasHeight = ROWS * CELL
 
+// ---- 速度选项 ----
+const speedOptions = [
+  { label: '🐢 慢速', value: 0 },
+  { label: '🐇 普通', value: 1 },
+  { label: '🐎 快速', value: 2 },
+  { label: '🚀 极速', value: 3 }
+]
+const speedLevel = ref(1)
+
 // ---- 游戏状态 ----
-const snake = ref([])          // [{x, y}, ...] 蛇头在前
+const snake = ref([])
 const score = ref(0)
 const level = ref(1)
 const gameStarted = ref(false)
 const gameOver = ref(false)
 const paused = ref(false)
 
-// ---- 游戏内部变量 ----
-let direction = { x: 1, y: 0 }   // 当前移动方向
-let nextDirection = { x: 1, y: 0 } // 缓存的输入方向（防止一帧内反向）
-let food = { x: 10, y: 10 }       // 食物位置
+// ---- 内部变量 ----
+let direction = { x: 1, y: 0 }
+let nextDirection = { x: 1, y: 0 }
+let food = { x: 10, y: 10 }
 let gameLoopId = null
-let moveInterval = 150            // 移动间隔（毫秒）
+let baseMoveInterval = 150
+let moveInterval = 150
 let lastMoveTime = 0
 let ctx = null
 
-// ---- Canvas 渲染 ----
+// ---- 速度调节 ----
+function setSpeed(val) {
+  speedLevel.value = val
+  updateMoveInterval()
+}
 
-/** 绘制一帧 */
+function updateMoveInterval() {
+  const multipliers = [1.8, 1.0, 0.55, 0.3]
+  const factor = multipliers[speedLevel.value] || 1.0
+  moveInterval = Math.max(30, Math.floor(baseMoveInterval * factor - (level.value - 1) * 8))
+}
+
+function changeDir(dx, dy) {
+  if (!gameStarted.value || gameOver.value || paused.value) return
+  if (dx === -1 && direction.x === 1) return
+  if (dx === 1 && direction.x === -1) return
+  if (dy === -1 && direction.y === 1) return
+  if (dy === 1 && direction.y === -1) return
+  nextDirection = { x: dx, y: dy }
+}
+
+// ---- 渲染 ----
+
 function draw() {
   if (!ctx) return
-  // 背景
   ctx.fillStyle = '#1a1a2e'
   ctx.fillRect(0, 0, canvasWidth, canvasHeight)
-  // 网格线
-  ctx.strokeStyle = '#2a2a4a'
-  ctx.lineWidth = 0.3
-  for (let r = 0; r <= ROWS; r++) {
-    ctx.beginPath(); ctx.moveTo(0, r * CELL); ctx.lineTo(COLS * CELL, r * CELL); ctx.stroke()
-  }
-  for (let c = 0; c <= COLS; c++) {
-    ctx.beginPath(); ctx.moveTo(c * CELL, 0); ctx.lineTo(c * CELL, ROWS * CELL); ctx.stroke()
-  }
-  // 食物
+  ctx.strokeStyle = '#2a2a4a'; ctx.lineWidth = 0.3
+  for (let r = 0; r <= ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * CELL); ctx.lineTo(COLS * CELL, r * CELL); ctx.stroke() }
+  for (let c = 0; c <= COLS; c++) { ctx.beginPath(); ctx.moveTo(c * CELL, 0); ctx.lineTo(c * CELL, ROWS * CELL); ctx.stroke() }
   drawFood()
-  // 蛇
   drawSnake()
 }
 
-/** 绘制食物 */
 function drawFood() {
-  const cx = food.x * CELL + CELL / 2
-  const cy = food.y * CELL + CELL / 2
+  const cx = food.x * CELL + CELL / 2, cy = food.y * CELL + CELL / 2
   const radius = CELL / 2 - 2
-  // 发光效果
-  ctx.shadowColor = '#ff4757'
-  ctx.shadowBlur = 8
+  ctx.shadowColor = '#ff4757'; ctx.shadowBlur = 8
   ctx.fillStyle = '#ff4757'
-  ctx.beginPath()
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2)
-  ctx.fill()
+  ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill()
   ctx.shadowBlur = 0
 }
 
-/** 绘制蛇 */
 function drawSnake() {
   const s = snake.value
   for (let i = 0; i < s.length; i++) {
     const { x, y } = s[i]
-    const px = x * CELL + 1
-    const py = y * CELL + 1
-    const size = CELL - 2
-    // 蛇身渐变色：头部亮，尾部暗
+    const px = x * CELL + 1, py = y * CELL + 1, size = CELL - 2
     const t = i / Math.max(s.length - 1, 1)
-    const r = Math.round(45 + t * 30)
-    const g = Math.round(200 - t * 100)
-    const b = Math.round(100 - t * 50)
+    const r = Math.round(45 + t * 30), g = Math.round(200 - t * 100), b = Math.round(100 - t * 50)
     ctx.fillStyle = `rgb(${r},${g},${b})`
     ctx.fillRect(px, py, size, size)
-    // 蛇头两只眼睛
     if (i === 0) {
       ctx.fillStyle = '#fff'
       const eyeSize = size / 5
-      // 根据方向调整眼睛位置
       let ex1, ey1, ex2, ey2
-      if (direction.x === 1) {        // 向右
-        ex1 = px + size * 0.65; ey1 = py + size * 0.25
-        ex2 = px + size * 0.65; ey2 = py + size * 0.65
-      } else if (direction.x === -1) { // 向左
-        ex1 = px + size * 0.35; ey1 = py + size * 0.25
-        ex2 = px + size * 0.35; ey2 = py + size * 0.65
-      } else if (direction.y === -1) { // 向上
-        ex1 = px + size * 0.25; ey1 = py + size * 0.35
-        ex2 = px + size * 0.65; ey2 = py + size * 0.35
-      } else {                          // 向下
-        ex1 = px + size * 0.25; ey1 = py + size * 0.65
-        ex2 = px + size * 0.65; ey2 = py + size * 0.65
-      }
-      ctx.beginPath()
-      ctx.arc(ex1, ey1, eyeSize, 0, Math.PI * 2); ctx.fill()
+      if (direction.x === 1)       { ex1 = px + size * 0.65; ey1 = py + size * 0.25; ex2 = px + size * 0.65; ey2 = py + size * 0.65 }
+      else if (direction.x === -1) { ex1 = px + size * 0.35; ey1 = py + size * 0.25; ex2 = px + size * 0.35; ey2 = py + size * 0.65 }
+      else if (direction.y === -1) { ex1 = px + size * 0.25; ey1 = py + size * 0.35; ex2 = px + size * 0.65; ey2 = py + size * 0.35 }
+      else                         { ex1 = px + size * 0.25; ey1 = py + size * 0.65; ex2 = px + size * 0.65; ey2 = py + size * 0.65 }
+      ctx.beginPath(); ctx.arc(ex1, ey1, eyeSize, 0, Math.PI * 2); ctx.fill()
       ctx.arc(ex2, ey2, eyeSize, 0, Math.PI * 2); ctx.fill()
-      // 瞳孔
       ctx.fillStyle = '#1a1a2e'
-      ctx.beginPath()
-      ctx.arc(ex1, ey1, eyeSize / 2.5, 0, Math.PI * 2); ctx.fill()
+      ctx.beginPath(); ctx.arc(ex1, ey1, eyeSize / 2.5, 0, Math.PI * 2); ctx.fill()
       ctx.arc(ex2, ey2, eyeSize / 2.5, 0, Math.PI * 2); ctx.fill()
     }
   }
@@ -179,80 +197,45 @@ function drawSnake() {
 
 // ---- 游戏逻辑 ----
 
-/** 生成不与蛇重叠的食物位置 */
 function spawnFood() {
   const s = snake.value
   const occupied = new Set(s.map(p => `${p.x},${p.y}`))
   const free = []
-  for (let x = 0; x < COLS; x++) {
-    for (let y = 0; y < ROWS; y++) {
-      if (!occupied.has(`${x},${y}`)) free.push({ x, y })
-    }
-  }
-  if (free.length === 0) return // 蛇占满棋盘（极罕见）
+  for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) if (!occupied.has(`${x},${y}`)) free.push({ x, y })
+  if (free.length === 0) return
   food = free[Math.floor(Math.random() * free.length)]
 }
 
-/** 初始化蛇（从中间开始）*/
 function initSnake() {
-  const startX = Math.floor(COLS / 2)
-  const startY = Math.floor(ROWS / 2)
-  snake.value = [
-    { x: startX, y: startY },
-    { x: startX - 1, y: startY },
-    { x: startX - 2, y: startY }
-  ]
+  const startX = Math.floor(COLS / 2), startY = Math.floor(ROWS / 2)
+  snake.value = [{ x: startX, y: startY }, { x: startX - 1, y: startY }, { x: startX - 2, y: startY }]
   direction = { x: 1, y: 0 }
   nextDirection = { x: 1, y: 0 }
 }
 
-/** 移动蛇 */
 function moveSnake() {
-  // 应用缓存的合法方向
   direction = { ...nextDirection }
   const head = snake.value[0]
-  const newHead = {
-    x: head.x + direction.x,
-    y: head.y + direction.y
-  }
-  // 撞墙检测
-  if (newHead.x < 0 || newHead.x >= COLS || newHead.y < 0 || newHead.y >= ROWS) {
-    endGame()
-    return
-  }
-  // 撞自己检测
-  if (snake.value.some(seg => seg.x === newHead.x && seg.y === newHead.y)) {
-    endGame()
-    return
-  }
-  // 新蛇头
+  const newHead = { x: head.x + direction.x, y: head.y + direction.y }
+  if (newHead.x < 0 || newHead.x >= COLS || newHead.y < 0 || newHead.y >= ROWS) { endGame(); return }
+  if (snake.value.some(seg => seg.x === newHead.x && seg.y === newHead.y)) { endGame(); return }
   const newSnake = [newHead, ...snake.value]
-  // 判断是否吃到食物
   if (newHead.x === food.x && newHead.y === food.y) {
     score.value += 10
-    // 每吃5个加速
-    if (score.value % 50 === 0) {
-      level.value++
-      moveInterval = Math.max(50, moveInterval - 15)
-    }
+    if (score.value % 50 === 0) { level.value++; updateMoveInterval() }
     spawnFood()
   } else {
-    newSnake.pop() // 去掉尾巴
+    newSnake.pop()
   }
   snake.value = newSnake
 }
 
-/** 结束游戏 */
 function endGame() {
   gameOver.value = true
   gameStarted.value = false
-  if (gameLoopId) {
-    cancelAnimationFrame(gameLoopId)
-    gameLoopId = null
-  }
+  if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
 }
 
-/** 切换暂停 */
 function togglePause() {
   if (!gameStarted.value || gameOver.value) return
   paused.value = !paused.value
@@ -262,63 +245,39 @@ function togglePause() {
 
 function gameLoop(timestamp) {
   if (gameStarted.value && !gameOver.value && !paused.value) {
-    if (timestamp - lastMoveTime > moveInterval) {
-      moveSnake()
-      lastMoveTime = timestamp
-    }
+    if (timestamp - lastMoveTime > moveInterval) { moveSnake(); lastMoveTime = timestamp }
   }
   draw()
   gameLoopId = requestAnimationFrame(gameLoop)
 }
 
-// ---- 开始 / 重置 ----
+// ---- 开始 ----
 
 function startGame() {
   initSnake()
-  score.value = 0
-  level.value = 1
-  gameOver.value = false
-  paused.value = false
-  gameStarted.value = true
-  moveInterval = 150
-  lastMoveTime = performance.now()
+  score.value = 0; level.value = 1
+  gameOver.value = false; paused.value = false; gameStarted.value = true
+  updateMoveInterval(); lastMoveTime = performance.now()
   spawnFood()
   if (gameLoopId) cancelAnimationFrame(gameLoopId)
   gameLoopId = requestAnimationFrame(gameLoop)
 }
 
-// ---- 键盘事件 ----
+// ---- 键盘 ----
 
 function onKeyDown(e) {
   if (!gameStarted.value || gameOver.value) {
-    if (e.key === ' ' || e.key === 'Enter') {
-      startGame()
-      e.preventDefault()
-    }
+    if (e.key === ' ' || e.key === 'Enter') { startGame(); e.preventDefault() }
     return
   }
-  if (e.key === 'p' || e.key === 'P') {
-    togglePause()
-    return
-  }
+  if (e.key === 'p' || e.key === 'P') { togglePause(); return }
   if (paused.value) return
-  // 方向控制（禁止原地掉头）
   switch (e.key) {
-    case 'ArrowUp':
-      if (direction.y !== 1) nextDirection = { x: 0, y: -1 }
-      e.preventDefault(); break
-    case 'ArrowDown':
-      if (direction.y !== -1) nextDirection = { x: 0, y: 1 }
-      e.preventDefault(); break
-    case 'ArrowLeft':
-      if (direction.x !== 1) nextDirection = { x: -1, y: 0 }
-      e.preventDefault(); break
-    case 'ArrowRight':
-      if (direction.x !== -1) nextDirection = { x: 1, y: 0 }
-      e.preventDefault(); break
-    case ' ':
-      startGame()
-      e.preventDefault(); break
+    case 'ArrowUp': changeDir(0, -1); e.preventDefault(); break
+    case 'ArrowDown': changeDir(0, 1); e.preventDefault(); break
+    case 'ArrowLeft': changeDir(-1, 0); e.preventDefault(); break
+    case 'ArrowRight': changeDir(1, 0); e.preventDefault(); break
+    case ' ': startGame(); e.preventDefault(); break
   }
 }
 
@@ -358,65 +317,146 @@ onUnmounted(() => {
   outline: none;
 }
 
-/* 遮罩层 */
+/* 遮罩层（开始 / 暂停 / 结束 统一复用）*/
 .overlay {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(0,0,0,0.75);
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
 .overlay-box {
   text-align: center;
   color: #fff;
 }
+
 .overlay-box h3 {
-  margin: 0 0 12px 0;
-  font-size: 22px;
+  margin: 0 0 16px 0;
+  font-size: 24px;
 }
+
 .overlay-box p {
   margin: 0 0 16px 0;
   font-size: 18px;
+}
+
+.overlay-tips {
+  margin-top: 14px !important;
+  font-size: 13px !important;
+  color: #c0c4cc;
+  line-height: 1.8;
 }
 
 /* 信息面板 */
 .info-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-width: 150px;
+  gap: 10px;
+  min-width: 164px;
 }
+
 .panel-card {
   background: #fff;
   border: 1px solid #e4e7ed;
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   text-align: center;
 }
+
 .panel-label {
   font-size: 13px;
   color: #909399;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
+
 .panel-value {
   font-size: 24px;
   font-weight: 700;
   color: #303133;
 }
+
+.panel-speed {
+  padding: 10px 8px;
+}
+
+.speed-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.speed-buttons .el-button {
+  min-width: auto;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
 .panel-buttons {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
-.panel-tips {
+
+/* 触屏控制按钮 */
+.touch-controls {
   background: #fff;
   border: 1px solid #e4e7ed;
   border-radius: 8px;
-  padding: 12px;
-  font-size: 12px;
-  color: #909399;
-  line-height: 1.8;
+  padding: 10px;
+  text-align: center;
 }
-.panel-tips p { margin: 0; }
+
+.touch-label {
+  font-size: 12px;
+  color: #c0c4cc;
+  margin-bottom: 8px;
+}
+
+.touch-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.touch-btn {
+  width: 40px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  font-size: 16px !important;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* 手机端适配 */
+@media (max-width: 768px) {
+  .snake-container {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .info-panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .panel-card {
+    flex: 1 1 auto;
+    min-width: 70px;
+    padding: 8px;
+  }
+
+  .panel-value { font-size: 20px; }
+
+  .panel-buttons { flex-direction: row; }
+
+  .touch-controls { width: 100%; }
+}
 </style>
