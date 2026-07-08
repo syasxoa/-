@@ -19,25 +19,23 @@
           </div>
         </div>
         <el-button type="primary" size="large" class="start-btn" @click="startGame">🎮 开始游戏</el-button>
-        <p class="menu-hint">↑ ↓ ← → 控制方向 &nbsp; P 暂停</p>
+        <p class="menu-hint">↑ ↓ ← → 控制方向 &nbsp; ESC 暂停</p>
       </div>
     </div>
 
     <!-- ======== 状态二：游戏中 ======== -->
     <div v-else-if="state === 'playing'" class="play-screen">
-      <!-- 大画布：支持触摸滑动 -->
       <div class="canvas-wrapper" ref="canvasWrapper"
         @touchstart.prevent="onTouchStart"
         @touchend.prevent="onTouchEnd">
         <canvas ref="canvasRef" class="play-canvas"></canvas>
-        <!-- 暂停按钮（画布右上角）-->
         <span class="pause-btn" @click="togglePause" v-if="!paused">暂停</span>
         <div v-if="paused" class="pause-overlay">
           <div class="pause-card">
             <h3>⏸ 已暂停</h3>
             <div class="pause-btns">
               <span class="pause-link" @click="togglePause">继续</span>
-              <span class="pause-link" @click="startGame">重新开始</span>
+              <span class="pause-link" @click="restartGame">重新开始</span>
               <span class="pause-link" @click="goBack">返回</span>
             </div>
           </div>
@@ -48,14 +46,14 @@
     <!-- ======== 状态三：游戏结束 ======== -->
     <div v-else-if="state === 'gameover'" class="over-screen">
       <div class="over-card">
-        <div class="over-icon">{{ score > bestScore ? '🎉' : '😵' }}</div>
+        <div class="over-icon">{{ isNewRecord ? '🎉' : '😵' }}</div>
         <h2 class="over-title">游戏结束</h2>
         <div class="over-stats">
           <div class="stat-row"><span>最终得分</span><strong>{{ score }}</strong></div>
           <div class="stat-row"><span>蛇身长度</span><strong>{{ snake.length }}</strong></div>
           <div class="stat-row"><span>达到等级</span><strong>Lv.{{ level }}</strong></div>
           <div class="stat-row"><span>历史最佳</span><strong>{{ bestScore }}</strong></div>
-          <div v-if="score > bestScore" class="new-record">🎊 新纪录！</div>
+          <div v-if="isNewRecord" class="new-record">🎊 新纪录！</div>
         </div>
         <div class="over-btns">
           <el-button type="primary" size="large" @click="startGame">🔄 重新开始</el-button>
@@ -84,12 +82,12 @@ const speedOptions = [
 const speedLevel = ref(1)
 const snake = ref([]), score = ref(0), level = ref(1), paused = ref(false)
 const bestScore = ref(0), bestLength = ref(3)
+const isNewRecord = ref(false) // ★ 独立标记
 
 let direction = { x: 1, y: 0 }, nextDirection = { x: 1, y: 0 }
 let food = { x: 10, y: 10 }
 let gameLoopId = null, moveInterval = 150, lastMoveTime = 0, ctx = null
 
-// ---- 触摸手势 ----
 let touchStartX = 0, touchStartY = 0
 const SWIPE_THRESHOLD = 25
 
@@ -99,7 +97,6 @@ function loadBest() {
 function saveBest() {
   if (score.value > bestScore.value || snake.value.length > bestLength.value) {
     localStorage.setItem('snake_best', JSON.stringify({ score: Math.max(score.value, bestScore.value), length: Math.max(snake.value.length, bestLength.value) }))
-    loadBest()
   }
 }
 
@@ -108,7 +105,6 @@ function updateMoveInterval() {
   moveInterval = Math.max(30, Math.floor(150 * (m[speedLevel.value] || 1) - (level.value - 1) * 8))
 }
 
-// ---- 方向切换（键盘+触屏共用）----
 function changeDir(dx, dy) {
   if (state.value !== 'playing' || paused.value) return
   if (dx === -1 && direction.x === 1) return
@@ -120,25 +116,16 @@ function changeDir(dx, dy) {
 
 // ---- 触摸手势 ----
 function onTouchStart(e) {
-  const t = e.touches[0]
-  touchStartX = t.clientX; touchStartY = t.clientY
+  const t = e.touches[0]; touchStartX = t.clientX; touchStartY = t.clientY
 }
 function onTouchEnd(e) {
   if (state.value !== 'playing' || paused.value) return
   const t = e.changedTouches[0]
-  const dx = t.clientX - touchStartX
-  const dy = t.clientY - touchStartY
+  const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY
   const adx = Math.abs(dx), ady = Math.abs(dy)
-
-  if (adx < SWIPE_THRESHOLD && ady < SWIPE_THRESHOLD) return // 太短忽略
-
-  if (adx > ady) {
-    // 水平滑动
-    changeDir(dx > 0 ? 1 : -1, 0)
-  } else {
-    // 垂直滑动
-    changeDir(0, dy > 0 ? 1 : -1)
-  }
+  if (adx < SWIPE_THRESHOLD && ady < SWIPE_THRESHOLD) return
+  if (adx > ady) { changeDir(dx > 0 ? 1 : -1, 0) }
+  else { changeDir(0, dy > 0 ? 1 : -1) }
 }
 
 // ---- 渲染 ----
@@ -207,20 +194,43 @@ function moveSnake() {
 }
 
 function togglePause() { if (state.value === 'playing') paused.value = !paused.value }
-function goBack() { state.value = 'menu'; loadBest() }
+
+// ★ 返回菜单
+function goBack() {
+  state.value = 'menu'
+  if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
+  ctx = null; loadBest()
+}
+
+// ★ 游戏结束 — 先记新纪录
 function endGame() {
-  state.value = 'gameover'; saveBest()
+  isNewRecord.value = score.value > bestScore.value // ★ 在 saveBest 前
+  state.value = 'gameover'
+  saveBest(); loadBest()
   if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
 }
 
-function gameLoop(ts) {
-  if (state.value === 'playing' && !paused.value && ts - lastMoveTime > moveInterval) { moveSnake(); lastMoveTime = ts }
-  if (state.value !== 'menu') draw()
-  gameLoopId = requestAnimationFrame(gameLoop)
+// ★ 暂停中重开（不闪屏）
+function restartGame() {
+  initSnake(); score.value = 0; level.value = 1; paused.value = false
+  updateMoveInterval(); lastMoveTime = performance.now(); spawnFood()
+}
+
+// ★ 只在游戏运行时跑循环
+function startLoop() {
+  function step(ts) {
+    if (state.value !== 'menu') {
+      if (state.value === 'playing' && !paused.value && ts - lastMoveTime > moveInterval) { moveSnake(); lastMoveTime = ts }
+      draw()
+    }
+    if (state.value !== 'menu') gameLoopId = requestAnimationFrame(step)
+  }
+  gameLoopId = requestAnimationFrame(step)
 }
 
 async function startGame() {
-  if (state.value === 'gameover' || state.value === 'playing') { state.value = 'menu'; await nextTick() }
+  if (state.value === 'gameover') { state.value = 'menu'; await nextTick() }
+  if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
   state.value = 'playing'
   await nextTick()
 
@@ -238,13 +248,11 @@ async function startGame() {
   ctx = canvas.getContext('2d')
   initSnake(); score.value = 0; level.value = 1; paused.value = false
   updateMoveInterval(); lastMoveTime = performance.now(); spawnFood()
-  if (gameLoopId) cancelAnimationFrame(gameLoopId)
-  gameLoopId = requestAnimationFrame(gameLoop)
+  startLoop()
 }
 
 function onKeyDown(e) {
   if (state.value !== 'playing') return
-  // ESC = 暂停/继续
   if (e.key === 'Escape') { togglePause(); e.preventDefault(); return }
   if (paused.value) return
   switch (e.key) {
@@ -255,7 +263,7 @@ function onKeyDown(e) {
   }
 }
 
-onMounted(() => { loadBest(); gameLoopId = requestAnimationFrame(gameLoop); window.addEventListener('keydown', onKeyDown) })
+onMounted(() => { loadBest(); window.addEventListener('keydown', onKeyDown) })
 onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.removeEventListener('keydown', onKeyDown) })
 </script>
 

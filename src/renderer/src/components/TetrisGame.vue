@@ -19,25 +19,23 @@
           </div>
         </div>
         <el-button type="primary" size="large" class="start-btn" @click="startGame">🎮 开始游戏</el-button>
-        <p class="menu-hint">← → 移动 &nbsp; ↑ 旋转 &nbsp; ↓ 加速 &nbsp; 空格 落底</p>
+        <p class="menu-hint">← → 移动 &nbsp; ↑ 旋转 &nbsp; ↓ 加速 &nbsp; 空格 落底 &nbsp; ESC 暂停</p>
       </div>
     </div>
 
     <!-- ======== 状态二：游戏中 ======== -->
     <div v-else-if="state === 'playing'" class="play-screen">
-      <!-- 大画布：支持触摸手势 -->
       <div class="canvas-wrapper" ref="canvasWrapper"
         @touchstart.prevent="onTouchStart"
         @touchend.prevent="onTouchEnd">
         <canvas ref="canvasRef" class="play-canvas"></canvas>
-        <!-- 暂停按钮（画布右上角）-->
         <span class="pause-btn" @click="togglePause" v-if="!paused">暂停</span>
         <div v-if="paused" class="pause-overlay">
           <div class="pause-card">
             <h3>⏸ 已暂停</h3>
             <div class="pause-btns">
               <span class="pause-link" @click="togglePause">继续</span>
-              <span class="pause-link" @click="startGame">重新开始</span>
+              <span class="pause-link" @click="restartGame">重新开始</span>
               <span class="pause-link" @click="goBack">返回</span>
             </div>
           </div>
@@ -48,14 +46,14 @@
     <!-- ======== 状态三：游戏结束 ======== -->
     <div v-else-if="state === 'gameover'" class="over-screen">
       <div class="over-card">
-        <div class="over-icon">{{ score > bestScore ? '🎉' : '😵' }}</div>
+        <div class="over-icon">{{ isNewRecord ? '🎉' : '😵' }}</div>
         <h2 class="over-title">游戏结束</h2>
         <div class="over-stats">
           <div class="stat-row"><span>最终得分</span><strong>{{ score }}</strong></div>
           <div class="stat-row"><span>消除行数</span><strong>{{ lines }}</strong></div>
           <div class="stat-row"><span>达到等级</span><strong>Lv.{{ level }}</strong></div>
           <div class="stat-row"><span>历史最佳</span><strong>{{ bestScore }}</strong></div>
-          <div v-if="score > bestScore" class="new-record">🎊 新纪录！</div>
+          <div v-if="isNewRecord" class="new-record">🎊 新纪录！</div>
         </div>
         <div class="over-btns">
           <el-button type="primary" size="large" @click="startGame">🔄 重新开始</el-button>
@@ -85,6 +83,7 @@ const speedOptions = [
 const speedLevel = ref(1)
 const score = ref(0), level = ref(1), lines = ref(0), paused = ref(false)
 const bestScore = ref(0), bestLines = ref(0)
+const isNewRecord = ref(false) // ★ 独立标记，避免被 saveBest 覆盖
 
 const TETROMINOS = {
   I: { shapes: [[[0,0],[1,0],[2,0],[3,0]],[[0,0],[0,1],[0,2],[0,3]],[[0,0],[1,0],[2,0],[3,0]],[[0,0],[0,1],[0,2],[0,3]]], color: '#00bcd4' },
@@ -92,17 +91,18 @@ const TETROMINOS = {
   T: { shapes: [[[0,0],[1,0],[2,0],[1,1]],[[0,0],[0,1],[0,2],[1,1]],[[1,0],[0,1],[1,1],[2,1]],[[0,1],[1,0],[1,1],[1,2]]], color: '#9c27b0' },
   S: { shapes: [[[1,0],[2,0],[0,1],[1,1]],[[0,0],[0,1],[1,1],[1,2]],[[1,0],[2,0],[0,1],[1,1]],[[0,0],[0,1],[1,1],[1,2]]], color: '#4caf50' },
   Z: { shapes: [[[0,0],[1,0],[1,1],[2,1]],[[1,0],[0,1],[1,1],[0,2]],[[0,0],[1,0],[1,1],[2,1]],[[1,0],[0,1],[1,1],[0,2]]], color: '#f44336' },
-  J: { shapes: [[[0,0],[0,1],[1,1],[2,1]],[[0,0],[1,0],[0,1],[0,2]],[[0,1],[1,1],[2,1],[2,0]],[[0,2],[0,1],[0,0],[1,2]]], color: '#2196f3' },
-  L: { shapes: [[[2,0],[0,1],[1,1],[2,1]],[[0,0],[0,1],[0,2],[1,0]],[[0,1],[1,1],[2,1],[0,0]],[[0,2],[0,1],[0,0],[1,2]]], color: '#ff9800' }
+  // ★ 修正 J 方块第4旋转态：[[1,0],[1,1],[1,2],[0,2]]
+  J: { shapes: [[[0,0],[0,1],[1,1],[2,1]],[[0,0],[1,0],[0,1],[0,2]],[[0,0],[1,0],[2,0],[2,1]],[[1,0],[1,1],[1,2],[0,2]]], color: '#2196f3' },
+  // ★ 修正 L 方块第4旋转态：[[0,0],[0,1],[0,2],[1,2]]
+  L: { shapes: [[[2,0],[0,1],[1,1],[2,1]],[[0,0],[1,0],[1,1],[1,2]],[[0,0],[1,0],[2,0],[0,1]],[[0,0],[0,1],[0,2],[1,2]]], color: '#ff9800' }
 }
 const TETRO_NAMES = Object.keys(TETROMINOS)
 
 let board = [], currentPiece = null, nextPieceName = ''
 let gameLoopId = null, dropInterval = 800, lastDropTime = 0, ctx = null
 
-// ---- 触摸手势变量 ----
 let touchStartX = 0, touchStartY = 0
-const SWIPE_THRESHOLD = 30 // 超过30px算滑动，否则算点击
+const SWIPE_THRESHOLD = 30
 
 function loadBest() {
   try { const d = JSON.parse(localStorage.getItem('tetris_best') || '{}'); bestScore.value = d.score || 0; bestLines.value = d.lines || 0 } catch { bestScore.value = 0; bestLines.value = 0 }
@@ -110,7 +110,6 @@ function loadBest() {
 function saveBest() {
   if (score.value > bestScore.value || lines.value > bestLines.value) {
     localStorage.setItem('tetris_best', JSON.stringify({ score: Math.max(score.value, bestScore.value), lines: Math.max(lines.value, bestLines.value) }))
-    loadBest()
   }
 }
 
@@ -183,34 +182,44 @@ function hardDrop() {
 }
 
 function togglePause() { if (state.value === 'playing') paused.value = !paused.value }
-function goBack() { state.value = 'menu'; loadBest() }
-function endGame() {
-  state.value = 'gameover'; saveBest()
+
+// ★ 返回菜单 — 停止游戏循环
+function goBack() {
+  state.value = 'menu'
   if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
+  ctx = null // 释放 canvas 引用
+  loadBest()
+}
+
+// ★ 游戏结束 — 先记新纪录再存
+function endGame() {
+  isNewRecord.value = score.value > bestScore.value // ★ 在 saveBest 前判断
+  state.value = 'gameover'
+  saveBest()
+  loadBest()
+  if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
+}
+
+// ★ 重开游戏（直接从 playing 重启，不经过 menu）
+function restartGame() {
+  createBoard()
+  score.value = 0; level.value = 1; lines.value = 0; paused.value = false
+  updateDropInterval(); lastDropTime = performance.now()
+  nextPieceName = randomPiece(); spawnPiece()
 }
 
 // ===== 触摸手势 =====
 function onTouchStart(e) {
-  const t = e.touches[0]
-  touchStartX = t.clientX; touchStartY = t.clientY
+  const t = e.touches[0]; touchStartX = t.clientX; touchStartY = t.clientY
 }
 function onTouchEnd(e) {
   if (state.value !== 'playing' || paused.value) return
   const t = e.changedTouches[0]
-  const dx = t.clientX - touchStartX
-  const dy = t.clientY - touchStartY
+  const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY
   const adx = Math.abs(dx), ady = Math.abs(dy)
-
-  if (adx < SWIPE_THRESHOLD && ady < SWIPE_THRESHOLD) {
-    // 点击 → 旋转
-    rotate()
-  } else if (adx > ady) {
-    // 左右滑动 → 移动
-    move(dx > 0 ? 1 : -1, 0)
-  } else {
-    // 上下滑动 → 加速下落
-    if (dy > 0) move(0, 1)
-  }
+  if (adx < SWIPE_THRESHOLD && ady < SWIPE_THRESHOLD) { rotate() }
+  else if (adx > ady) { move(dx > 0 ? 1 : -1, 0) }
+  else { if (dy > 0) move(0, 1) }
 }
 
 // ===== 渲染 =====
@@ -237,15 +246,22 @@ function drawBoard() {
   }
 }
 
-function gameLoop(ts) {
-  if (state.value === 'playing' && !paused.value && ts - lastDropTime > dropInterval) { move(0, 1); lastDropTime = ts }
-  if (state.value !== 'menu') drawBoard()
-  gameLoopId = requestAnimationFrame(gameLoop)
+// ★ 游戏循环 — 只在非 menu 状态运行
+function startLoop() {
+  function step(ts) {
+    if (state.value !== 'menu') {
+      if (state.value === 'playing' && !paused.value && ts - lastDropTime > dropInterval) { move(0, 1); lastDropTime = ts }
+      drawBoard()
+    }
+    if (state.value !== 'menu') gameLoopId = requestAnimationFrame(step)
+  }
+  gameLoopId = requestAnimationFrame(step)
 }
 
 // ===== 开始 =====
 async function startGame() {
-  if (state.value === 'gameover' || state.value === 'playing') { state.value = 'menu'; await nextTick() }
+  if (state.value === 'gameover') { state.value = 'menu'; await nextTick() }
+  if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
   state.value = 'playing'
   await nextTick()
 
@@ -265,14 +281,12 @@ async function startGame() {
   score.value = 0; level.value = 1; lines.value = 0; paused.value = false
   updateDropInterval(); lastDropTime = performance.now()
   nextPieceName = randomPiece(); spawnPiece()
-  if (gameLoopId) cancelAnimationFrame(gameLoopId)
-  gameLoopId = requestAnimationFrame(gameLoop)
+  startLoop()
 }
 
 // ===== 键盘 =====
 function onKeyDown(e) {
   if (state.value !== 'playing') return
-  // ESC = 暂停/继续
   if (e.key === 'Escape') { togglePause(); e.preventDefault(); return }
   if (paused.value) return
   switch (e.key) {
@@ -284,7 +298,7 @@ function onKeyDown(e) {
   }
 }
 
-onMounted(() => { loadBest(); gameLoopId = requestAnimationFrame(gameLoop); window.addEventListener('keydown', onKeyDown) })
+onMounted(() => { loadBest(); window.addEventListener('keydown', onKeyDown) })
 onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.removeEventListener('keydown', onKeyDown) })
 </script>
 
