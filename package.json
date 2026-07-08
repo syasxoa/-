@@ -2,7 +2,7 @@
   "name": "heima-jizhang",
   "private": true,
   "version": "1.0.0",
-  "description": "黑马记账 - 跨平台桌面记账应用",
+  "description": "轻松记账 - 跨平台桌面记账应用",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
     "android:build": "vite build && npx cap sync android",
     "android:open": "npx cap open android"
   },
-  "author": "黑马记账",
+  "author": "轻松记账",
   "license": "MIT",
   "dependencies": {
     "@capacitor/android": "^8.4.1",

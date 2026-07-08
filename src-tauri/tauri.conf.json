@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
-  "productName": "黑马记账",
+  "productName": "轻松记账",
   "version": "1.0.0",
   "identifier": "com.heima.jizhang",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "黑马记账",
+        "title": "轻松记账",
         "width": 1000,
         "height": 700,
         "minWidth": 800,

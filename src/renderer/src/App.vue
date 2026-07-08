@@ -4,8 +4,8 @@
       <!-- 顶部导航 -->
       <el-header class="app-header">
         <div class="header-left">
-          <span class="app-logo">🐴</span>
-          <span class="app-title">黑马记账</span>
+          <span class="app-logo">📒</span>
+          <span class="app-title">轻松记账</span>
         </div>
         <div class="header-right">
           <el-menu

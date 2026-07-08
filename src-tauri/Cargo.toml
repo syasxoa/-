@@ -1,8 +1,8 @@
 [package]
 name = "heima-jizhang"
 version = "1.0.0"
-description = "黑马记账 - 跨平台桌面记账应用"
-authors = ["黑马记账"]
+description = "轻松记账 - 跨平台桌面记账应用"
+authors = ["轻松记账"]
 edition = "2021"
 
 [lib]

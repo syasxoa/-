@@ -111,7 +111,7 @@ async function handleDelete(expense) {
 async function handleExport() {
   try {
     const csv = await store.exportCSV(selectedMonth.value)
-    const filename = `黑马记账_${selectedMonth.value}.csv`
+    const filename = `轻松记账_${selectedMonth.value}.csv`
 
     // 桌面版（Tauri）：保存到下载文件夹，显示路径
     if (window.__TAURI_INTERNALS__) {
@@ -142,7 +142,7 @@ async function handleExport() {
           directory: Directory.Cache
         })
         await Share.share({
-          title: '黑马记账 数据导出',
+          title: '轻松记账 数据导出',
           text: '记账数据CSV文件',
           url: result.uri,
           dialogTitle: '分享记账数据'
