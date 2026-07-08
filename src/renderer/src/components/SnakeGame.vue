@@ -5,45 +5,34 @@
       <div class="menu-card">
         <div class="menu-icon">🐍</div>
         <h2 class="menu-title">贪吃蛇</h2>
-
-        <!-- 速度选择 -->
         <div class="menu-section">
           <div class="menu-label">游戏速度</div>
           <div class="speed-row">
             <el-button
               v-for="opt in speedOptions" :key="opt.value"
               :type="speedLevel === opt.value ? 'primary' : ''"
-              @click="speedLevel = opt.value"
-              size="large"
+              @click="speedLevel = opt.value" size="large"
             >{{ opt.label }}</el-button>
           </div>
         </div>
-
-        <!-- 历史最佳 -->
         <div class="menu-section">
           <div class="menu-label">🏆 历史最佳</div>
           <div class="record-row">
             <div class="record-item">
-              <span class="record-num">{{ bestScore }}</span>
-              <span class="record-unit">最高分</span>
+              <span class="record-num">{{ bestScore }}</span><span class="record-unit">最高分</span>
             </div>
             <div class="record-item">
-              <span class="record-num">{{ bestLength }}</span>
-              <span class="record-unit">最长蛇</span>
+              <span class="record-num">{{ bestLength }}</span><span class="record-unit">最长蛇</span>
             </div>
           </div>
         </div>
-
-        <el-button type="primary" size="large" class="start-btn" @click="startGame">
-          🎮 开始游戏
-        </el-button>
+        <el-button type="primary" size="large" class="start-btn" @click="startGame">🎮 开始游戏</el-button>
         <p class="menu-hint">↑ ↓ ← → 控制方向 &nbsp; P 暂停</p>
       </div>
     </div>
 
     <!-- ======== 状态二：游戏中 ======== -->
-    <div v-else class="play-screen">
-      <!-- 顶栏 -->
+    <div v-else-if="state === 'playing'" class="play-screen">
       <div class="play-topbar">
         <span class="topbar-item">🐍 <strong>{{ snake.length }}</strong></span>
         <span class="topbar-item">⭐ <strong>{{ score }}</strong></span>
@@ -51,12 +40,8 @@
         <span class="topbar-item">⚡ {{ speedOptions[speedLevel].label }}</span>
         <el-button size="small" @click="togglePause" class="topbar-pause">⏯ 暂停</el-button>
       </div>
-
-      <!-- 大画布 -->
       <div class="canvas-wrapper" ref="canvasWrapper">
         <canvas ref="canvasRef" class="play-canvas"></canvas>
-
-        <!-- 暂停遮罩 -->
         <div v-if="paused" class="pause-overlay">
           <div class="pause-card">
             <h3>⏸ 已暂停</h3>
@@ -64,8 +49,6 @@
           </div>
         </div>
       </div>
-
-      <!-- 底栏触屏 -->
       <div class="play-bottombar">
         <div class="touch-row">
           <button class="ctrl-btn" @pointerdown.prevent="changeDir(0, -1)">▲</button>
@@ -79,11 +62,10 @@
     </div>
 
     <!-- ======== 状态三：游戏结束 ======== -->
-    <div v-if="state === 'gameover'" class="over-screen">
+    <div v-else-if="state === 'gameover'" class="over-screen">
       <div class="over-card">
         <div class="over-icon">{{ score > bestScore ? '🎉' : '😵' }}</div>
         <h2 class="over-title">游戏结束</h2>
-
         <div class="over-stats">
           <div class="stat-row"><span>最终得分</span><strong>{{ score }}</strong></div>
           <div class="stat-row"><span>蛇身长度</span><strong>{{ snake.length }}</strong></div>
@@ -91,7 +73,6 @@
           <div class="stat-row"><span>历史最佳</span><strong>{{ bestScore }}</strong></div>
           <div v-if="score > bestScore" class="new-record">🎊 新纪录！</div>
         </div>
-
         <div class="over-btns">
           <el-button type="primary" size="large" @click="startGame">🔄 重新开始</el-button>
           <el-button size="large" @click="goBack">↩ 返回</el-button>
@@ -102,22 +83,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 
-// ---- 状态机 ----
 const state = ref('menu')
-
-// ---- DOM ----
 const canvasRef = ref(null)
 const canvasWrapper = ref(null)
 
-// ---- 画布参数 ----
 const COLS = 20, ROWS = 20
 let CELL = 26
 let canvasWidth = COLS * CELL
 let canvasHeight = ROWS * CELL
 
-// ---- 速度 ----
 const speedOptions = [
   { label: '🐢 慢速', value: 0 },
   { label: '🐇 普通', value: 1 },
@@ -126,31 +102,19 @@ const speedOptions = [
 ]
 const speedLevel = ref(1)
 
-// ---- 游戏状态 ----
-const snake = ref([]), score = ref(0), level = ref(1)
-const paused = ref(false)
+const snake = ref([]), score = ref(0), level = ref(1), paused = ref(false)
+const bestScore = ref(0), bestLength = ref(3)
 
-// ---- 历史 ----
-const bestScore = ref(0), bestLength = ref(0)
-
-// ---- 内部 ----
 let direction = { x: 1, y: 0 }, nextDirection = { x: 1, y: 0 }
 let food = { x: 10, y: 10 }
 let gameLoopId = null, moveInterval = 150, lastMoveTime = 0, ctx = null
 
-// ---- 历史记录 ----
 function loadBest() {
-  try {
-    const d = JSON.parse(localStorage.getItem('snake_best') || '{}')
-    bestScore.value = d.score || 0; bestLength.value = d.length || 3
-  } catch { bestScore.value = 0; bestLength.value = 3 }
+  try { const d = JSON.parse(localStorage.getItem('snake_best') || '{}'); bestScore.value = d.score || 0; bestLength.value = d.length || 3 } catch { bestScore.value = 0; bestLength.value = 3 }
 }
 function saveBest() {
   if (score.value > bestScore.value || snake.value.length > bestLength.value) {
-    localStorage.setItem('snake_best', JSON.stringify({
-      score: Math.max(score.value, bestScore.value),
-      length: Math.max(snake.value.length, bestLength.value)
-    }))
+    localStorage.setItem('snake_best', JSON.stringify({ score: Math.max(score.value, bestScore.value), length: Math.max(snake.value.length, bestLength.value) }))
     loadBest()
   }
 }
@@ -160,7 +124,6 @@ function updateMoveInterval() {
   moveInterval = Math.max(30, Math.floor(150 * (m[speedLevel.value] || 1) - (level.value - 1) * 8))
 }
 
-// ---- 触屏方向切换 ----
 function changeDir(dx, dy) {
   if (state.value !== 'playing' || paused.value) return
   if (dx === -1 && direction.x === 1) return
@@ -170,7 +133,6 @@ function changeDir(dx, dy) {
   nextDirection = { x: dx, y: dy }
 }
 
-// ---- 渲染 ----
 function draw() {
   if (!ctx) return
   ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, canvasWidth, canvasHeight)
@@ -183,16 +145,14 @@ function draw() {
 function drawFood() {
   const cx = food.x * CELL + CELL / 2, cy = food.y * CELL + CELL / 2, radius = CELL / 2 - 3
   ctx.shadowColor = '#ff4757'; ctx.shadowBlur = 10
-  ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill()
-  ctx.shadowBlur = 0
+  ctx.fillStyle = '#ff4757'; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0
 }
 
 function drawSnake() {
   const s = snake.value
   for (let i = 0; i < s.length; i++) {
     const { x, y } = s[i]; const px = x * CELL + 1, py = y * CELL + 1, size = CELL - 2
-    const t = i / Math.max(s.length - 1, 1)
-    ctx.fillStyle = `rgb(${Math.round(45 + t * 30)},${Math.round(200 - t * 100)},${Math.round(100 - t * 50)})`
+    ctx.fillStyle = `rgb(${Math.round(45 + (i / Math.max(s.length - 1, 1)) * 30)},${Math.round(200 - (i / Math.max(s.length - 1, 1)) * 100)},${Math.round(100 - (i / Math.max(s.length - 1, 1)) * 50)})`
     ctx.fillRect(px, py, size, size)
     if (i === 0) {
       ctx.fillStyle = '#fff'; const es = size / 5
@@ -208,10 +168,8 @@ function drawSnake() {
   }
 }
 
-// ---- 逻辑 ----
 function spawnFood() {
-  const s = snake.value
-  const occupied = new Set(s.map(p => `${p.x},${p.y}`))
+  const occupied = new Set(snake.value.map(p => `${p.x},${p.y}`))
   const free = []
   for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) if (!occupied.has(`${x},${y}`)) free.push({ x, y })
   if (free.length === 0) return
@@ -226,8 +184,7 @@ function initSnake() {
 
 function moveSnake() {
   direction = { ...nextDirection }
-  const head = snake.value[0]
-  const nh = { x: head.x + direction.x, y: head.y + direction.y }
+  const nh = { x: snake.value[0].x + direction.x, y: snake.value[0].y + direction.y }
   if (nh.x < 0 || nh.x >= COLS || nh.y < 0 || nh.y >= ROWS) { endGame(); return }
   if (snake.value.some(seg => seg.x === nh.x && seg.y === nh.y)) { endGame(); return }
   const ns = [nh, ...snake.value]
@@ -247,15 +204,19 @@ function endGame() {
   if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null }
 }
 
-// ---- 循环 ----
 function gameLoop(ts) {
   if (state.value === 'playing' && !paused.value && ts - lastMoveTime > moveInterval) { moveSnake(); lastMoveTime = ts }
   if (state.value !== 'menu') draw()
   gameLoopId = requestAnimationFrame(gameLoop)
 }
 
-// ---- 开始 ----
-function startGame() {
+// ===== 开始（关键修复：用 nextTick 等 DOM）=====
+async function startGame() {
+  if (state.value === 'gameover') { state.value = 'menu'; await nextTick() }
+  state.value = 'playing'
+  await nextTick() // ★ 等 Vue 渲染完 canvas-wrapper
+
+  const canvas = canvasRef.value
   const wrapper = canvasWrapper.value
   if (wrapper) {
     const maxW = wrapper.clientWidth - 4
@@ -264,17 +225,16 @@ function startGame() {
     CELL = Math.min(CELL, 32); CELL = Math.max(CELL, 18)
   }
   canvasWidth = COLS * CELL; canvasHeight = ROWS * CELL
-  const canvas = canvasRef.value
   if (canvas) { canvas.width = canvasWidth; canvas.height = canvasHeight; canvas.style.width = canvasWidth + 'px'; canvas.style.height = canvasHeight + 'px' }
 
+  ctx = canvas.getContext('2d')
   initSnake(); score.value = 0; level.value = 1; paused.value = false
-  state.value = 'playing'; updateMoveInterval(); lastMoveTime = performance.now()
+  updateMoveInterval(); lastMoveTime = performance.now()
   spawnFood()
   if (gameLoopId) cancelAnimationFrame(gameLoopId)
   gameLoopId = requestAnimationFrame(gameLoop)
 }
 
-// ---- 键盘 ----
 function onKeyDown(e) {
   if (state.value !== 'playing' || paused.value) return
   switch (e.key) {
@@ -286,25 +246,16 @@ function onKeyDown(e) {
   }
 }
 
-onMounted(() => {
-  loadBest()
-  ctx = canvasRef.value?.getContext('2d')
-  draw(); gameLoopId = requestAnimationFrame(gameLoop)
-  window.addEventListener('keydown', onKeyDown)
-})
+onMounted(() => { loadBest(); gameLoopId = requestAnimationFrame(gameLoop); window.addEventListener('keydown', onKeyDown) })
 onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.removeEventListener('keydown', onKeyDown) })
 </script>
 
 <style scoped>
-/* ===== 通用 ===== */
 .snake-root { width: 100%; }
 
 /* ===== 菜单 ===== */
-.menu-screen { display: flex; align-items: center; justify-content: center; min-height: 400px; }
-.menu-card {
-  background: #fff; border-radius: 16px; padding: 40px 36px; text-align: center;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08); max-width: 400px; width: 100%;
-}
+.menu-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
+.menu-card { background: #fff; border-radius: 16px; padding: 40px 36px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.08); max-width: 400px; width: 100%; }
 .menu-icon { font-size: 64px; margin-bottom: 8px; }
 .menu-title { font-size: 26px; font-weight: 700; color: #303133; margin: 0 0 24px 0; }
 .menu-section { margin-bottom: 20px; }
@@ -319,53 +270,31 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 
 /* ===== 游戏 ===== */
 .play-screen { display: flex; flex-direction: column; align-items: center; position: relative; }
-.play-topbar {
-  display: flex; align-items: center; gap: 20px; padding: 8px 16px;
-  background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  margin-bottom: 12px; flex-wrap: wrap; justify-content: center;
-}
+.play-topbar { display: flex; align-items: center; gap: 20px; padding: 8px 16px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 12px; flex-wrap: wrap; justify-content: center; }
 .topbar-item { font-size: 15px; color: #606266; }
 .topbar-item strong { color: #303133; }
 .topbar-pause { margin-left: 8px; }
-.canvas-wrapper {
-  position: relative; border: 3px solid #67c23a; border-radius: 6px;
-  overflow: hidden; line-height: 0;
-}
+.canvas-wrapper { position: relative; border: 3px solid #67c23a; border-radius: 6px; overflow: hidden; line-height: 0; }
 .play-canvas { display: block; }
-.pause-overlay {
-  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center;
-}
+.pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
 .pause-card { text-align: center; color: #fff; }
 .pause-card h3 { font-size: 24px; margin: 0 0 16px 0; }
 
 .play-bottombar { margin-top: 12px; text-align: center; }
 .touch-row { display: flex; justify-content: center; gap: 8px; margin-bottom: 6px; }
-.ctrl-btn {
-  width: 48px; height: 44px; border: none; border-radius: 10px;
-  background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  font-size: 20px; cursor: pointer; user-select: none; touch-action: manipulation;
-}
+.ctrl-btn { width: 48px; height: 44px; border: none; border-radius: 10px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-size: 20px; cursor: pointer; user-select: none; touch-action: manipulation; }
 .ctrl-btn:active { background: #e6ffe6; transform: scale(0.95); }
 
 /* ===== 结束 ===== */
-.over-screen { display: flex; align-items: center; justify-content: center; min-height: 400px; }
-.over-card {
-  background: #fff; border-radius: 16px; padding: 36px 32px; text-align: center;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.1); max-width: 380px; width: 100%;
-}
+.over-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
+.over-card { background: #fff; border-radius: 16px; padding: 36px 32px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.1); max-width: 380px; width: 100%; }
 .over-icon { font-size: 48px; margin-bottom: 4px; }
 .over-title { font-size: 24px; font-weight: 700; color: #303133; margin: 0 0 20px 0; }
 .over-stats { margin-bottom: 20px; }
-.stat-row {
-  display: flex; justify-content: space-between; padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0; font-size: 15px; color: #606266;
-}
+.stat-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 15px; color: #606266; }
 .stat-row strong { color: #303133; font-size: 17px; }
 .new-record { color: #e6a23c; font-weight: 700; font-size: 16px; margin-top: 10px; }
 .over-btns { display: flex; gap: 12px; justify-content: center; }
 
-@media (max-width: 768px) {
-  .menu-card { padding: 28px 20px; }
-}
+@media (max-width: 768px) { .menu-card { padding: 28px 20px; } }
 </style>
