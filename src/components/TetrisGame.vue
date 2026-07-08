@@ -312,9 +312,9 @@ onUnmounted(() => { if (gameLoopId) cancelAnimationFrame(gameLoopId); window.rem
 .play-canvas { display: block; }
 .pause-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
 .pause-card { text-align: center; color: #fff; }
-.pause-card h3 { font-size: 24px; margin: 0 0 16px 0; }
+.pause-card h3 { font-size: 24px; margin: 0 0 36px 0; }
 .pause-btns { display: flex; flex-direction: column; gap: 14px; align-items: center; }
-.pause-link { font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.6); cursor: pointer; user-select: none; padding: 4px 8px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
+.pause-link { font-size: 18px; font-weight: 400; color: rgba(255,255,255,0.6); cursor: pointer; user-select: none; padding: 4px 8px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
 .pause-link:hover, .pause-link:active { color: #fff; background: rgba(255,255,255,0.12); }
 
 .over-screen { display: flex; align-items: center; justify-content: center; min-height: 420px; }
