@@ -1,11 +1,9 @@
 <template>
   <div class="games-page">
     <el-tabs v-model="activeGame" type="border-card" class="game-tabs">
-      <!-- 俄罗斯方块 -->
       <el-tab-pane label="🧱 俄罗斯方块" name="tetris">
         <TetrisGame />
       </el-tab-pane>
-      <!-- 贪吃蛇 -->
       <el-tab-pane label="🐍 贪吃蛇" name="snake">
         <SnakeGame />
       </el-tab-pane>
@@ -23,7 +21,7 @@ const activeGame = ref('tetris')
 
 <style scoped>
 .games-page {
-  max-width: 820px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
