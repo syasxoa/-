@@ -23,11 +23,9 @@
     "@element-plus/icons-vue": "^2.3.1",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@vitejs/plugin-legacy": "^5.4.3",
     "echarts": "^5.5.0",
     "element-plus": "^2.7.0",
     "pinia": "^2.1.7",
-    "terser": "^5.49.0",
     "vue": "^3.4.0",
     "vue-echarts": "^6.7.0",
     "vue-router": "^4.3.0"
