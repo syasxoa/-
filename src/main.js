@@ -8,7 +8,11 @@ import App from './App.vue'
 import router from './router'
 import './styles/main.css'
 
-// v25-minimal
+// Service Worker 注册：只在浏览器PWA环境需要，Tauri桌面端跳过
+// Tauri 的自定义协议不支持 SW，注册后会拦截所有请求导致白屏
+if ('serviceWorker' in navigator && !window.__TAURI_INTERNALS__) {
+  navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(function() {})
+}
 
 const app = createApp(App)
 

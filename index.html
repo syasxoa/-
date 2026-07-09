@@ -11,14 +11,34 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#409eff" />
     <title>轻松记账</title>
+    <!-- 兜底：如果 JS 加载失败，至少显示提示文字 -->
+    <style>
+      #loading-fallback {
+        display: none;
+        position: fixed; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center; font-family: sans-serif; color: #909399;
+      }
+      #loading-fallback.show { display: block; }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div id="loading-fallback">
+        <p style="font-size:40px;margin:0 0 12px">⏳</p>
+        <p style="margin:0">加载中...如果长时间无反应，请检查网络</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
     <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(function() {})
-      }
+      // 3秒后还没渲染就是出问题了
+      setTimeout(function() {
+        var app = document.getElementById('app')
+        var fb = document.getElementById('loading-fallback')
+        if (app && app.children.length <= 1 && fb) {
+          fb.classList.add('show')
+        }
+      }, 3000)
     </script>
   </body>
 </html>
