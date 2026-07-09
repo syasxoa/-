@@ -1,15 +1,23 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import legacy from '@vitejs/plugin-legacy'
 import path from 'path'
 
-// GitHub Pages 部署路径（仓库名以 - 结尾，GitHub 生成的站点路径为 /-/）
+// GitHub Pages 部署路径（仓库名以 - 结尾，站点路径为 /-/）
 const BASE = process.env.BUILD_PAGES === '1' ? '/-/' : '/'
 
 export default defineConfig({
   base: BASE,
   plugins: [
     vue(),
-    // 构建时修正 index.html 中 icon/manifest 等静态资源的引用路径
+    // ★ 旧浏览器兼容：自动生成 <script nomodule> 回退版本 + polyfills
+    // 解决华为卓易通等旧 WebView 不支持 ES module 导致的白屏
+    legacy({
+      targets: ['defaults', 'android >= 4.4', 'ios >= 10'],
+      polyfills: true,
+      modernPolyfills: false
+    }),
+    // 修正 gh-pages 部署时 icon/manifest 路径
     {
       name: 'fix-html-paths',
       enforce: 'post',
@@ -21,7 +29,7 @@ export default defineConfig({
       }
     }
   ],
-  // ★ 关键：转译 JS 为 ES2015，解决旧版 WebView（华为卓易通等）不支持 ?? ?. 语法导致白屏
+  // 转译现代语法（?? .? 等）确保旧浏览器不报语法错误
   build: {
     target: 'es2015'
   },
