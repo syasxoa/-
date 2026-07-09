@@ -8,15 +8,7 @@ import App from './App.vue'
 import router from './router'
 import './styles/main.css'
 
-// 注册 PWA Service Worker v2（Vite 构建时 BASE_URL 自动替换，使用新文件名避开旧 SW 缓存死锁）
-if ('serviceWorker' in navigator) {
-  // 先清掉所有旧 SW（包括旧路径 sw.js 的残留注册）
-  navigator.serviceWorker.getRegistrations().then(function(regs) {
-    for (var i = 0; i < regs.length; i++) regs[i].unregister()
-  }).finally(function() {
-    navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw-v2.js').catch(function() {})
-  })
-}
+// v25-minimal
 
 const app = createApp(App)
 

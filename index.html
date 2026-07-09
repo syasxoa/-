@@ -11,17 +11,14 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#409eff" />
     <title>轻松记账</title>
-    <script>
-      // ★ 立即清理旧 Service Worker（阻止旧 SW 继续返回缓存白屏）
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(r) {
-          for (var i = 0; i < r.length; i++) r[i].unregister()
-        })
-      }
-    </script>
   </head>
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(function() {})
+      }
+    </script>
   </body>
 </html>
