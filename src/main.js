@@ -8,9 +8,8 @@ import App from './App.vue'
 import router from './router'
 import './styles/main.css'
 
-// Service Worker 注册：只在浏览器PWA环境需要，Tauri桌面端跳过
-// Tauri 的自定义协议不支持 SW，注册后会拦截所有请求导致白屏
-if ('serviceWorker' in navigator && !window.__TAURI_INTERNALS__) {
+// PWA Service Worker 注册（import.meta.env.BASE_URL 构建时自动适配 / 或 /-/ 路径）
+if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(function() {})
 }
 
