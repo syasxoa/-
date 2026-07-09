@@ -8,11 +8,6 @@ import App from './App.vue'
 import router from './router'
 import './styles/main.css'
 
-// PWA Service Worker 注册（import.meta.env.BASE_URL 构建时自动适配 / 或 /-/ 路径）
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(function() {})
-}
-
 const app = createApp(App)
 
 // 注册所有 Element Plus 图标

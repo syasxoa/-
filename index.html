@@ -15,5 +15,11 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
+    <script>
+      // 注册 PWA Service Worker（离线缓存）
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(function() {})
+      }
+    </script>
   </body>
 </html>
