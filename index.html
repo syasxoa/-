@@ -15,11 +15,6 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
-    <script>
-      // 注册 PWA Service Worker（离线缓存）
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(function() {})
-      }
-    </script>
+    <!-- Service Worker 由 vite.config.js 中的 fix-html-paths 插件自动注入，保证路径始终正确 -->
   </body>
 </html>
