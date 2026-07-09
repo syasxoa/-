@@ -8,21 +8,13 @@ import App from './App.vue'
 import router from './router'
 import './styles/main.css'
 
-// 注册 PWA Service Worker（Vite 构建时 import.meta.env.BASE_URL 自动替换为 / 或 /-/ ）
-// 先清理所有旧的 Service Worker 注册（避免路径变更后旧 SW 继续拦截请求导致白屏）
+// 注册 PWA Service Worker v2（Vite 构建时 BASE_URL 自动替换，使用新文件名避开旧 SW 缓存死锁）
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    var promises = []
-    for (var i = 0; i < registrations.length; i++) {
-      promises.push(registrations[i].unregister())
-    }
-    return Promise.all(promises)
-  }).then(function() {
-    // 旧 SW 全部清理完毕，注册新的
-    return navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js')
-  }).catch(function() {
-    // 清理失败也尝试注册新的（降级处理）
-    navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(function() {})
+  // 先清掉所有旧 SW（包括旧路径 sw.js 的残留注册）
+  navigator.serviceWorker.getRegistrations().then(function(regs) {
+    for (var i = 0; i < regs.length; i++) regs[i].unregister()
+  }).finally(function() {
+    navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw-v2.js').catch(function() {})
   })
 }
 
